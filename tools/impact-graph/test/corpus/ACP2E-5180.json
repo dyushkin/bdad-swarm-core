@@ -1,0 +1,9 @@
+{
+    "ticket": "ACP2E-5180",
+    "diff_ref": "2.4-develop...HEAD",
+    "changed_symbol": "Magento\\Sales\\Model\\Order::registerCancellation",
+    "must_include_test": "AdminCancelOrderWithSimpleProductCustomStockAfterPartialShipmentTest",
+    "must_include_group": "msi",
+    "must_flag_mock": "testRegisterDiscountCanceled",
+    "expected_new_collaborators": ["getQtyToShip", "round"]
+}

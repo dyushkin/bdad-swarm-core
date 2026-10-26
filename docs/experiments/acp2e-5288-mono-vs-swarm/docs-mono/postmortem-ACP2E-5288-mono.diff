@@ -1,0 +1,353 @@
+# ACP2E-5288 — git diff (magento2ee repo, branch ACP2E-5288-mono)
+# Generated 2026-08-27 12:57:14
+
+diff --git a/app/code/Magento/SalesRuleStaging/Test/Mftf/Data/StaleTabScheduledUpdateData.xml b/app/code/Magento/SalesRuleStaging/Test/Mftf/Data/StaleTabScheduledUpdateData.xml
+new file mode 100644
+index 0000000000..619fda0da0
+--- /dev/null
++++ b/app/code/Magento/SalesRuleStaging/Test/Mftf/Data/StaleTabScheduledUpdateData.xml
+@@ -0,0 +1,36 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!--
++/**
++ * Copyright 2026 Adobe
++ * All Rights Reserved.
++ */
++-->
++<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++          xsi:noNamespaceSchemaLocation="urn:magento:mftf:DataGenerator/etc/dataProfileSchema.xsd">
++    <entity name="StaleTabCartPriceRule" type="SalesRule">
++        <data key="name" unique="suffix">StaleTabRule</data>
++        <data key="websites">Main Website</data>
++        <data key="customerGroups">'NOT LOGGED IN', 'General', 'Wholesale', 'Retailer'</data>
++        <data key="uses_per_customer">100</data>
++        <data key="apply">Percent of product price discount</data>
++        <data key="discountAmount">10</data>
++    </entity>
++    <entity name="StaleTabPreconditionRule" type="SalesRule">
++        <data key="name" unique="suffix">StaleTabPreconditionRule</data>
++        <data key="websites">Main Website</data>
++        <data key="customerGroups">'NOT LOGGED IN', 'General', 'Wholesale', 'Retailer'</data>
++        <data key="uses_per_customer">100</data>
++        <data key="apply">Percent of product price discount</data>
++        <data key="discountAmount">10</data>
++    </entity>
++    <entity name="StaleTabPreconditionUpdate" type="stage">
++        <data key="updateName" unique="suffix">Applied_Update</data>
++        <data key="updateDescription">Applied update to advance the staging version</data>
++        <data key="startDate">+1 minute</data>
++    </entity>
++    <entity name="StaleTabFutureUpdate" type="stage">
++        <data key="updateName" unique="suffix">Future_Update</data>
++        <data key="updateDescription">Future scheduled update</data>
++        <data key="startDate">+2 days</data>
++    </entity>
++</entities>
+diff --git a/app/code/Magento/SalesRuleStaging/Test/Mftf/Test/AdminStaleTabScheduledUpdateKeepsCartPriceRuleAvailableTest.xml b/app/code/Magento/SalesRuleStaging/Test/Mftf/Test/AdminStaleTabScheduledUpdateKeepsCartPriceRuleAvailableTest.xml
+new file mode 100644
+index 0000000000..d3a5c8ae31
+--- /dev/null
++++ b/app/code/Magento/SalesRuleStaging/Test/Mftf/Test/AdminStaleTabScheduledUpdateKeepsCartPriceRuleAvailableTest.xml
+@@ -0,0 +1,128 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!--
++/**
++ * Copyright 2026 Adobe
++ * All Rights Reserved.
++ */
++-->
++<tests xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++       xsi:noNamespaceSchemaLocation="urn:magento:mftf:Test/etc/testSchema.xsd">
++    <test name="AdminStaleTabScheduledUpdateKeepsCartPriceRuleAvailableTest">
++        <annotations>
++            <features value="StagingAndPreview"/>
++            <stories value="Cart Price Rule scheduled update multi-tab concurrency"/>
++            <title value="Saving a stale scheduled-update tab must not delete the Cart Price Rule"/>
++            <description value="With the same Cart Price Rule open in two tabs, removing the scheduled update in
++                one tab and then saving the stale scheduled-update modal in the other tab must not make the rule
++                unavailable or leave inconsistent SalesRule/coupon data."/>
++            <severity value="CRITICAL"/>
++            <group value="staging"/>
++        </annotations>
++        <before>
++            <actionGroup ref="AdminLoginActionGroup" stepKey="loginAsAdmin"/>
++        </before>
++        <after>
++            <helper class="Magento\SalesRule\Test\Mftf\Helper\SalesRuleApiHelper"
++                    method="deleteAllSalesRulesApi" stepKey="deleteAllCartPriceRulesViaApi"/>
++            <actionGroup ref="AdminLogoutActionGroup" stepKey="logout"/>
++        </after>
++
++        <!-- Precondition: a scheduled update must have already taken effect on this install
++             (this is what advances the global staging version and makes the defect reachable) -->
++        <actionGroup ref="AdminCreateCartPriceRuleActionGroup" stepKey="createPreconditionRule">
++            <argument name="ruleName" value="StaleTabPreconditionRule"/>
++        </actionGroup>
++        <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="openGridPrecondition"/>
++        <actionGroup ref="AdminFilterCartPriceRuleActionGroup" stepKey="openRulePrecondition">
++            <argument name="ruleName" value="StaleTabPreconditionRule.name"/>
++        </actionGroup>
++        <actionGroup ref="AdminFillPermanentUpdateActionGroup" stepKey="fillPreconditionUpdate">
++            <argument name="stage" value="StaleTabPreconditionUpdate"/>
++        </actionGroup>
++        <actionGroup ref="SaveRuleStagingActionGroup" stepKey="savePreconditionUpdate"/>
++        <waitForPageLoad stepKey="waitAfterPreconditionSave"/>
++        <wait time="75" stepKey="waitForUpdateStartTimeToPass"/>
++        <magentoCLI command="cron:run --group=staging" stepKey="runStagingCronOne"/>
++        <magentoCLI command="cron:run --group=staging" stepKey="runStagingCronTwo"/>
++
++        <!-- Create the Cart Price Rule under test -->
++        <actionGroup ref="AdminCreateCartPriceRuleActionGroup" stepKey="createCartPriceRule">
++            <argument name="ruleName" value="StaleTabCartPriceRule"/>
++        </actionGroup>
++
++        <!-- Open the rule and give it a specific coupon -->
++        <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="openGridForCoupon"/>
++        <actionGroup ref="AdminFilterCartPriceRuleActionGroup" stepKey="openRuleForCoupon">
++            <argument name="ruleName" value="StaleTabCartPriceRule.name"/>
++        </actionGroup>
++        <waitForElementVisible selector="{{AdminCartPriceRulesFormSection.coupon}}" stepKey="waitCouponType"/>
++        <selectOption selector="{{AdminCartPriceRulesFormSection.coupon}}"
++                      userInput="Specific Coupon" stepKey="selectSpecificCoupon"/>
++        <waitForElementVisible selector="{{AdminCartPriceRulesFormSection.couponCode}}" stepKey="waitCouponCode"/>
++        <fillField selector="{{AdminCartPriceRulesFormSection.couponCode}}"
++                   userInput="{{StaleTabCartPriceRule.name}}" stepKey="fillCouponCode"/>
++        <click selector="{{AdminCartPriceRulesFormSection.save}}" stepKey="saveCoupon"/>
++        <waitForPageLoad stepKey="waitAfterCouponSave"/>
++        <waitForElementVisible selector="{{AdminMessagesSection.success}}" stepKey="seeCouponSaved"/>
++
++        <!-- Tab A: open the rule and schedule a new (future) update -->
++        <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="openGridTabA"/>
++        <actionGroup ref="AdminFilterCartPriceRuleActionGroup" stepKey="openRuleTabA">
++            <argument name="ruleName" value="StaleTabCartPriceRule.name"/>
++        </actionGroup>
++        <actionGroup ref="AdminFillPermanentUpdateActionGroup" stepKey="fillScheduledUpdate">
++            <argument name="stage" value="StaleTabFutureUpdate"/>
++        </actionGroup>
++        <actionGroup ref="SaveRuleStagingActionGroup" stepKey="saveScheduledUpdate"/>
++        <waitForPageLoad stepKey="waitAfterScheduleSave"/>
++
++        <!-- Tab A: open the scheduled change in the modal and leave it open (stale) -->
++        <click selector="{{AdminScheduledChangesSection.scheduleViewEdit(StaleTabFutureUpdate.updateName)}}"
++               stepKey="tabAOpenScheduledUpdate"/>
++        <waitForElementVisible selector="{{AdminStagingSlideOutSection.save}}" stepKey="tabAModalOpen"/>
++
++        <!-- Tab B: open the same rule in a new tab -->
++        <openNewTab stepKey="openTabB"/>
++        <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="openGridTabB"/>
++        <actionGroup ref="AdminFilterCartPriceRuleActionGroup" stepKey="openRuleTabB">
++            <argument name="ruleName" value="StaleTabCartPriceRule.name"/>
++        </actionGroup>
++
++        <!-- Tab B: View/Edit the scheduled change, remove it, delete the update, done, then main Save -->
++        <click selector="{{AdminScheduledChangesSection.scheduleViewEdit(StaleTabFutureUpdate.updateName)}}"
++               stepKey="tabBOpenScheduledUpdate"/>
++        <waitForElementVisible selector="{{AdminStagingSlideOutSection.removeFromUpdate}}" stepKey="tabBWaitRemoveBtn"/>
++        <click selector="{{AdminStagingSlideOutSection.removeFromUpdate}}" stepKey="tabBRemoveFromUpdate"/>
++        <waitForText selector="{{AdminRemoveFromUpdateSection.title}}"
++                     userInput="Remove Cart Price Rule from Update" stepKey="tabBSeeRemoveTitle"/>
++        <click selector="{{AdminRemoveFromUpdateSection.deleteTheUpdate}}" stepKey="tabBDeleteTheUpdate"/>
++        <click selector="{{AdminRemoveFromUpdateSection.done}}" stepKey="tabBDone"/>
++        <waitForElementNotVisible selector="{{AdminRemoveFromUpdateSection.title}}" stepKey="tabBRemovePanelClosed"/>
++        <click selector="{{AdminCartPriceRulesFormSection.save}}" stepKey="tabBMainSave"/>
++        <waitForPageLoad stepKey="tabBWaitAfterSave"/>
++        <waitForElementVisible selector="{{AdminMessagesSection.success}}" stepKey="tabBSeeSaved"/>
++
++        <!-- Tab A: the modal still shows the now-deleted schedule; save it (error is expected), then main Save -->
++        <switchToPreviousTab stepKey="switchBackToTabA"/>
++        <click selector="{{AdminStagingSlideOutSection.save}}" stepKey="tabASaveStaleModal"/>
++        <waitForPageLoad stepKey="tabAWaitAfterModalSave"/>
++        <conditionalClick selector="{{AdminStagingSlideOutSection.cancel}}"
++                          dependentSelector="{{AdminStagingSlideOutSection.cancel}}" visible="true"
++                          stepKey="tabACloseModalIfOpen"/>
++        <waitForPageLoad stepKey="tabAWaitAfterCloseModal"/>
++        <click selector="{{AdminCartPriceRulesFormSection.save}}" stepKey="tabAMainSave"/>
++        <waitForPageLoad stepKey="tabAWaitAfterMainSave"/>
++
++        <!-- The Cart Price Rule must still exist and be reachable -->
++        <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="openGridAssert"/>
++        <conditionalClick selector="{{AdminDataGridHeaderSection.clearFilters}}"
++                          dependentSelector="{{AdminDataGridHeaderSection.clearFilters}}" visible="true"
++                          stepKey="clearGridFilters"/>
++        <fillField selector="{{AdminCartPriceRulesSection.filterByNameInput}}"
++                   userInput="{{StaleTabCartPriceRule.name}}" stepKey="filterAssert"/>
++        <click selector="{{AdminCartPriceRulesSection.searchButton}}" stepKey="searchAssert"/>
++        <waitForPageLoad stepKey="waitGridAssert"/>
++        <see selector="{{AdminCartPriceRulesSection.rowByIndex('1')}}"
++             userInput="{{StaleTabCartPriceRule.name}}" stepKey="assertRuleStillPresent"/>
++    </test>
++</tests>
+diff --git a/app/code/Magento/Staging/Model/Entity/Update/Action/Save/SaveAction.php b/app/code/Magento/Staging/Model/Entity/Update/Action/Save/SaveAction.php
+index 10cc8c10cc..eb81a5cbd7 100644
+--- a/app/code/Magento/Staging/Model/Entity/Update/Action/Save/SaveAction.php
++++ b/app/code/Magento/Staging/Model/Entity/Update/Action/Save/SaveAction.php
+@@ -18,6 +18,7 @@ namespace Magento\Staging\Model\Entity\Update\Action\Save;
+ 
+ use Magento\Framework\EntityManager\TypeResolver;
+ use Magento\Framework\Exception\LocalizedException;
++use Magento\Framework\Model\AbstractModel;
+ use Magento\Staging\Api\Data\UpdateInterface;
+ use Magento\Staging\Controller\Adminhtml\Entity\Update\Service as UpdateService;
+ use Magento\Staging\Model\Entity\HydratorInterface;
+@@ -158,6 +159,11 @@ class SaveAction implements ActionInterface
+             $update = $this->editUpdate($stagingData);
+ 
+             $entity = $this->entityHydrator->hydrate($entityData);
++            if (!$this->isEntityScheduledInUpdate($entity, $stagingData['update_id'])) {
++                throw new LocalizedException(
++                    __('This scheduled update no longer exists. Reload the page and try again.')
++                );
++            }
+             $this->entityStaging->schedule($entity, $update->getId(), [
+                 'origin_in' => $stagingData['update_id'],
+             ]);
+@@ -166,6 +172,38 @@ class SaveAction implements ActionInterface
+         return true;
+     }
+ 
++    /**
++     * Whether the entity still has a persisted version scheduled in the update being edited.
++     *
++     * A stale browser tab can submit an update whose scheduled version was already removed in another
++     * session. The submitted created_in cannot be trusted (it comes from the stale form), so the
++     * persisted version rows are checked instead; re-scheduling a removed version corrupts the chain.
++     *
++     * @param mixed $entity
++     * @param int|string $updateId
++     * @return bool
++     */
++    private function isEntityScheduledInUpdate($entity, $updateId): bool
++    {
++        if (!$entity instanceof AbstractModel) {
++            return true;
++        }
++        $metadata = $this->metadataPool->getMetadata($this->typeResolver->resolve($entity));
++        $identifierField = $metadata->getIdentifierField();
++        $identifier = $entity->getData($identifierField);
++        if (empty($identifier)) {
++            return true;
++        }
++        $connection = $metadata->getEntityConnection();
++        $select = $connection->select()
++            ->from($metadata->getEntityTable(), [$identifierField])
++            ->where($identifierField . ' = ?', $identifier)
++            ->where('created_in = ?', $updateId)
++            ->setPart('disable_staging_preview', true);
++
++        return (bool)$connection->fetchOne($select);
++    }
++
+     /**
+      * Validate input parameters
+      *
+diff --git a/app/code/Magento/Staging/Test/Unit/Model/Entity/Update/Action/Save/SaveActionTest.php b/app/code/Magento/Staging/Test/Unit/Model/Entity/Update/Action/Save/SaveActionTest.php
+index 09cca58107..a6652cc5b4 100644
+--- a/app/code/Magento/Staging/Test/Unit/Model/Entity/Update/Action/Save/SaveActionTest.php
++++ b/app/code/Magento/Staging/Test/Unit/Model/Entity/Update/Action/Save/SaveActionTest.php
+@@ -18,9 +18,14 @@ declare(strict_types=1);
+ 
+ namespace Magento\Staging\Test\Unit\Model\Entity\Update\Action\Save;
+ 
++use Magento\Framework\DB\Adapter\AdapterInterface;
++use Magento\Framework\DB\Select;
++use Magento\Framework\EntityManager\EntityMetadataInterface;
+ use Magento\Framework\EntityManager\HydratorInterface as EntityManagerHydrator;
+ use Magento\Framework\EntityManager\MetadataPool;
+ use Magento\Framework\EntityManager\TypeResolver;
++use Magento\Framework\Exception\LocalizedException;
++use Magento\Framework\Model\AbstractModel;
+ use Magento\Staging\Api\Data\UpdateInterface;
+ use Magento\Staging\Api\UpdateRepositoryInterface;
+ use Magento\Staging\Controller\Adminhtml\Entity\Update\Service;
+@@ -256,6 +261,91 @@ class SaveActionTest extends TestCase
+         $this->assertTrue($this->saveAction->execute($params));
+     }
+ 
++    /**
++     * A stale tab editing an update whose scheduled version was concurrently removed must be rejected.
++     */
++    public function testExecuteEditUpdateRejectsEntityNotScheduledInUpdate()
++    {
++        $updateId = 100;
++        $params = [
++            'stagingData' => ['update_id' => $updateId, 'start_time' => 1],
++            'entityData' => [],
++        ];
++
++        $entityMock = $this->setUpEditScenario($updateId, false);
++        $this->entityHydrator->method('hydrate')->willReturn($entityMock);
++
++        $this->entityStaging->expects($this->never())->method('schedule');
++
++        $this->expectException(LocalizedException::class);
++        $this->expectExceptionMessage('This scheduled update no longer exists. Reload the page and try again.');
++        $this->saveAction->execute($params);
++    }
++
++    /**
++     * A valid edit whose entity is still scheduled in the update proceeds to reschedule.
++     */
++    public function testExecuteEditUpdateProceedsWhenEntityScheduledInUpdate()
++    {
++        $updateId = 100;
++        $params = [
++            'stagingData' => ['update_id' => $updateId, 'start_time' => 1],
++            'entityData' => [],
++        ];
++
++        $entityMock = $this->setUpEditScenario($updateId, true);
++        $this->entityHydrator->method('hydrate')->willReturn($entityMock);
++
++        $this->entityStaging->expects($this->once())
++            ->method('schedule')
++            ->with($entityMock, $updateId, ['origin_in' => $updateId]);
++
++        $this->assertTrue($this->saveAction->execute($params));
++    }
++
++    /**
++     * Configure the edit-branch collaborators and the persisted-version lookup.
++     *
++     * @param int $updateId
++     * @param bool $versionRowExists whether a salesrule row with created_in = updateId exists
++     * @return AbstractModel|MockObject
++     */
++    private function setUpEditScenario(int $updateId, bool $versionRowExists)
++    {
++        $updateMock = $this->createMock(Update::class);
++        $updateMock->method('getId')->willReturn($updateId);
++        $this->updateRepository->expects($this->atLeastOnce())
++            ->method('get')
++            ->with($updateId)
++            ->willReturn($updateMock);
++
++        $updateHydrator = $this->createMock(EntityManagerHydrator::class);
++        $this->metadataPool->method('getHydrator')->with(UpdateInterface::class)->willReturn($updateHydrator);
++
++        $select = $this->createMock(Select::class);
++        $select->method('from')->willReturnSelf();
++        $select->method('where')->willReturnSelf();
++        $select->method('setPart')->willReturnSelf();
++        $connection = $this->createMock(AdapterInterface::class);
++        $connection->method('select')->willReturn($select);
++        $connection->method('fetchOne')->willReturn($versionRowExists ? (string)$updateId : false);
++
++        $metadata = $this->createMock(EntityMetadataInterface::class);
++        $metadata->method('getIdentifierField')->willReturn('rule_id');
++        $metadata->method('getEntityTable')->willReturn('salesrule');
++        $metadata->method('getEntityConnection')->willReturn($connection);
++        $this->metadataPool->method('getMetadata')->willReturn($metadata);
++        $this->typeResolver->method('resolve')->willReturn('SalesRuleInterface');
++
++        $entityMock = $this->getMockBuilder(AbstractModel::class)
++            ->disableOriginalConstructor()
++            ->onlyMethods(['getData'])
++            ->getMock();
++        $entityMock->method('getData')->with('rule_id')->willReturn(1);
++
++        return $entityMock;
++    }
++
+     /**
+      * Checks the editing of existed update for case when 'EndTime' parameter was changed
+      */

@@ -1,0 +1,847 @@
+# ACP2E-5288 — code & test diff
+# Base repo: magento2ee (EE). New files shown against /dev/null.
+# Generated 2026-08-27T20:56:54Z. Not committed (working-tree snapshot).
+
+diff --git a/app/code/Magento/SalesRuleStaging/Test/Mftf/Data/SalesRuleStagingData.xml b/app/code/Magento/SalesRuleStaging/Test/Mftf/Data/SalesRuleStagingData.xml
+index 029ae1db8e..89ec3801bb 100644
+--- a/app/code/Magento/SalesRuleStaging/Test/Mftf/Data/SalesRuleStagingData.xml
++++ b/app/code/Magento/SalesRuleStaging/Test/Mftf/Data/SalesRuleStagingData.xml
+@@ -38,4 +38,21 @@
+         <data key="updateName" unique="suffix">Test_Update_1</data>
+         <data key="updateDescription">Test description</data>
+     </entity>
++    <!-- Near-future update used only to advance the global staging version via an applied update. -->
++    <entity name="PreconditionAppliedUpdate" type="SalesRuleStaging">
++        <data key="name">Precondition Applied Update</data>
++        <data key="updateName">Precondition Applied Update</data>
++        <data key="description">Applied so the global staging version is advanced before the race scenario</data>
++        <data key="updateDescription">Applied so the global staging version is advanced before the race scenario</data>
++    </entity>
++    <!-- Permanent (start date only, no end date) far-future scheduled change for the stale-tab race. -->
++    <!-- name and updateName are identical literals so both create and remove action groups target it. -->
++    <entity name="StaleTabPermanentUpdate" type="SalesRuleStaging">
++        <data key="name">StaleTabPermanentUpdate</data>
++        <data key="updateName">StaleTabPermanentUpdate</data>
++        <data key="description">Permanent scheduled change used for the stale-tab race scenario</data>
++        <data key="updateDescription">Permanent scheduled change used for the stale-tab race scenario</data>
++        <data key="startDate">12/31/2026</data>
++        <data key="viewedit">View/Edit</data>
++    </entity>
+ </entities>
+diff --git a/app/code/Magento/Staging/Model/Entity/Update/Action/Save/SaveAction.php b/app/code/Magento/Staging/Model/Entity/Update/Action/Save/SaveAction.php
+index 10cc8c10cc..963ab4c86f 100644
+--- a/app/code/Magento/Staging/Model/Entity/Update/Action/Save/SaveAction.php
++++ b/app/code/Magento/Staging/Model/Entity/Update/Action/Save/SaveAction.php
+@@ -18,6 +18,7 @@ namespace Magento\Staging\Model\Entity\Update\Action\Save;
+ 
+ use Magento\Framework\EntityManager\TypeResolver;
+ use Magento\Framework\Exception\LocalizedException;
++use Magento\Framework\Model\AbstractModel;
+ use Magento\Staging\Api\Data\UpdateInterface;
+ use Magento\Staging\Controller\Adminhtml\Entity\Update\Service as UpdateService;
+ use Magento\Staging\Model\Entity\HydratorInterface;
+@@ -158,6 +159,7 @@ class SaveAction implements ActionInterface
+             $update = $this->editUpdate($stagingData);
+ 
+             $entity = $this->entityHydrator->hydrate($entityData);
++            $this->assertEntityPresentInUpdate($entity, $stagingData['update_id']);
+             $this->entityStaging->schedule($entity, $update->getId(), [
+                 'origin_in' => $stagingData['update_id'],
+             ]);
+@@ -166,6 +168,54 @@ class SaveAction implements ActionInterface
+         return true;
+     }
+ 
++    /**
++     * Ensure the entity is still scheduled in the referenced update before re-saving into it.
++     *
++     * Guards against a stale editing session: if the entity was removed from the update by another
++     * request (e.g. a second browser tab) the persisted version row at created_in = update_id no
++     * longer exists, and re-scheduling into that emptied update would rewrite the surviving row's
++     * version interval against a phantom origin, pushing the entity out of the visible version range.
++     * The persisted state is queried directly because the posted created_in is taken from the stale
++     * form and cannot be trusted.
++     *
++     * @param object $entity
++     * @param int|string $updateId
++     * @return void
++     * @throws LocalizedException
++     */
++    private function assertEntityPresentInUpdate($entity, $updateId): void
++    {
++        if (!$entity instanceof AbstractModel) {
++            return;
++        }
++        try {
++            $entityType = $this->typeResolver->resolve($entity);
++            $metadata = $this->metadataPool->getMetadata($entityType);
++        } catch (\Exception $e) {
++            return;
++        }
++        $identifierField = $metadata->getIdentifierField();
++        $identifier = $entity->getData($identifierField);
++        if (empty($identifier)) {
++            return;
++        }
++        $connection = $metadata->getEntityConnection();
++        $select = $connection->select()
++            ->from($metadata->getEntityTable(), $identifierField)
++            ->where($identifierField . ' = ?', $identifier)
++            ->where('created_in = ?', $updateId)
++            ->setPart('disable_staging_preview', true)
++            ->limit(1);
++        if (!$connection->fetchOne($select)) {
++            throw new LocalizedException(
++                __(
++                    'This scheduled update no longer contains the item you are trying to save. '
++                    . 'It may have been changed in another session. Please reload the page and try again.'
++                )
++            );
++        }
++    }
++
+     /**
+      * Validate input parameters
+      *
+diff --git a/app/code/Magento/Staging/Test/Unit/Model/Entity/Update/Action/Save/SaveActionTest.php b/app/code/Magento/Staging/Test/Unit/Model/Entity/Update/Action/Save/SaveActionTest.php
+index 09cca58107..6de845d0e8 100644
+--- a/app/code/Magento/Staging/Test/Unit/Model/Entity/Update/Action/Save/SaveActionTest.php
++++ b/app/code/Magento/Staging/Test/Unit/Model/Entity/Update/Action/Save/SaveActionTest.php
+@@ -18,9 +18,14 @@ declare(strict_types=1);
+ 
+ namespace Magento\Staging\Test\Unit\Model\Entity\Update\Action\Save;
+ 
++use Magento\Framework\DB\Adapter\AdapterInterface;
++use Magento\Framework\DB\Select;
++use Magento\Framework\EntityManager\EntityMetadataInterface;
+ use Magento\Framework\EntityManager\HydratorInterface as EntityManagerHydrator;
+ use Magento\Framework\EntityManager\MetadataPool;
+ use Magento\Framework\EntityManager\TypeResolver;
++use Magento\Framework\Exception\LocalizedException;
++use Magento\Framework\Model\AbstractModel;
+ use Magento\Staging\Api\Data\UpdateInterface;
+ use Magento\Staging\Api\UpdateRepositoryInterface;
+ use Magento\Staging\Controller\Adminhtml\Entity\Update\Service;
+@@ -382,4 +387,87 @@ class SaveActionTest extends TestCase
+ 
+         $this->assertTrue($this->saveAction->execute($params));
+     }
++
++    /**
++     * A stale editing session must be rejected: when the entity no longer has a persisted version
++     * row at created_in = update_id (removed by another request), the save is declined instead of
++     * re-scheduling into the emptied update and corrupting the entity's version interval.
++     */
++    public function testExecuteEditRejectsStaleSaveWhenEntityRemovedFromUpdate(): void
++    {
++        $updateId = 1;
++        $params = [
++            'stagingData' => ['update_id' => $updateId, 'start_time' => 1],
++            'entityData' => ['rule_id' => 5],
++        ];
++
++        $entity = $this->prepareEditBranch($updateId, 5, false);
++
++        $this->entityStaging->expects($this->never())->method('schedule');
++        $this->expectException(LocalizedException::class);
++
++        $this->saveAction->execute($params);
++    }
++
++    /**
++     * A normal edit still proceeds: when the entity keeps its persisted version row at
++     * created_in = update_id, the guard passes and the entity is re-scheduled as before.
++     */
++    public function testExecuteEditProceedsWhenEntityStillPresentInUpdate(): void
++    {
++        $updateId = 1;
++        $params = [
++            'stagingData' => ['update_id' => $updateId, 'start_time' => 1],
++            'entityData' => ['rule_id' => 5],
++        ];
++
++        $entity = $this->prepareEditBranch($updateId, 5, true);
++
++        $this->entityStaging->expects($this->once())
++            ->method('schedule')
++            ->with($entity, $updateId, ['origin_in' => $updateId]);
++
++        $this->assertTrue($this->saveAction->execute($params));
++    }
++
++    /**
++     * Wire the edit branch and the persisted-row lookup used by the stale-save guard.
++     *
++     * @param int $updateId
++     * @param int $identifier
++     * @param bool $rowPresent whether a persisted version row exists at created_in = update_id
++     * @return AbstractModel|MockObject
++     */
++    private function prepareEditBranch(int $updateId, int $identifier, bool $rowPresent)
++    {
++        $updateMock = $this->createMock(Update::class);
++        $updateMock->method('getId')->willReturn($updateId);
++        $this->updateRepository->method('get')->with($updateId)->willReturn($updateMock);
++        $this->updateRepository->method('save')->willReturnSelf();
++        $this->metadataPool->method('getHydrator')
++            ->willReturn($this->createMock(EntityManagerHydrator::class));
++
++        $entity = $this->createMock(AbstractModel::class);
++        $entity->method('getData')->willReturnCallback(
++            fn ($key = null) => $key === 'rule_id' ? $identifier : null
++        );
++        $this->entityHydrator->method('hydrate')->willReturn($entity);
++
++        $this->typeResolver->method('resolve')->willReturn('EntityType');
++        $select = $this->createMock(Select::class);
++        $select->method('from')->willReturnSelf();
++        $select->method('where')->willReturnSelf();
++        $select->method('setPart')->willReturnSelf();
++        $select->method('limit')->willReturnSelf();
++        $connection = $this->createMock(AdapterInterface::class);
++        $connection->method('select')->willReturn($select);
++        $connection->method('fetchOne')->willReturn($rowPresent ? (string)$identifier : false);
++        $metadata = $this->createMock(EntityMetadataInterface::class);
++        $metadata->method('getIdentifierField')->willReturn('rule_id');
++        $metadata->method('getEntityTable')->willReturn('salesrule');
++        $metadata->method('getEntityConnection')->willReturn($connection);
++        $this->metadataPool->method('getMetadata')->willReturn($metadata);
++
++        return $entity;
++    }
+ }
+diff --git a/app/code/Magento/SalesRuleStaging/Test/Mftf/ActionGroup/AdminCreateCartPriceRuleWithCouponUsingGroupsWidgetActionGroup.xml b/app/code/Magento/SalesRuleStaging/Test/Mftf/ActionGroup/AdminCreateCartPriceRuleWithCouponUsingGroupsWidgetActionGroup.xml
+new file mode 100644
+index 0000000000..b2aa5de2c1
+--- /dev/null
++++ b/app/code/Magento/SalesRuleStaging/Test/Mftf/ActionGroup/AdminCreateCartPriceRuleWithCouponUsingGroupsWidgetActionGroup.xml
+@@ -0,0 +1,64 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!--
++ /**
++ * ADOBE CONFIDENTIAL
++ *
++ * Copyright 2026 Adobe
++ * All Rights Reserved.
++ *
++ * NOTICE: All information contained herein is, and remains
++ * the property of Adobe and its suppliers, if any. The intellectual
++ * and technical concepts contained herein are proprietary to Adobe
++ * and its suppliers and are protected by all applicable intellectual
++ * property laws, including trade secret and copyright laws.
++ * Dissemination of this information or reproduction of this material
++ * is strictly forbidden unless prior written permission is obtained
++ * from Adobe.
++ */
++-->
++<actionGroups xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++              xsi:noNamespaceSchemaLocation="urn:magento:mftf:Test/etc/actionGroupSchema.xsd">
++    <!-- Creates a cart price rule with a specific coupon on B2B-enabled builds, where the customer group
++         field is a JS multiselect widget and the stock AdminCreateCartPriceRuleActionGroup cannot drive it. -->
++    <actionGroup name="AdminCreateCartPriceRuleWithCouponUsingGroupsWidgetActionGroup">
++        <arguments>
++            <argument name="ruleName"/>
++            <argument name="couponCode" defaultValue="_defaultCoupon.code"/>
++        </arguments>
++        <amOnPage url="{{AdminCartPriceRulesPage.url}}" stepKey="amOnCartPriceList"/>
++        <waitForPageLoad stepKey="waitForPriceList"/>
++        <click selector="{{AdminCartPriceRulesSection.addNewRuleButton}}" stepKey="clickAddNewRule"/>
++        <waitForElementVisible selector="{{AdminCartPriceRulesFormSection.ruleName}}" stepKey="waitForRuleName"/>
++        <fillField selector="{{AdminCartPriceRulesFormSection.ruleName}}" userInput="{{ruleName.name}}"
++                   stepKey="fillRuleName"/>
++        <selectOption selector="{{AdminCartPriceRulesFormSection.websites}}" userInput="{{ruleName.websites}}"
++                      stepKey="selectWebsites"/>
++        <!-- Select all customer groups through the multiselect widget. -->
++        <waitForElementClickable selector="{{AdminCartPriceRulesFormSection.customerGroupsToggle}}"
++                                 stepKey="waitForCustomerGroupsToggle"/>
++        <click selector="{{AdminCartPriceRulesFormSection.customerGroupsToggle}}"
++               stepKey="openCustomerGroupsDropdown"/>
++        <waitForElementClickable selector="{{AdminCartPriceRulesFormSection.customerGroupsSelectAll}}"
++                                 stepKey="waitForSelectAll"/>
++        <click selector="{{AdminCartPriceRulesFormSection.customerGroupsSelectAll}}"
++               stepKey="selectAllCustomerGroups"/>
++        <click selector="{{AdminCartPriceRulesFormSection.customerGroupsDoneButton}}"
++               stepKey="applyCustomerGroups"/>
++        <!-- Configure a specific coupon code. -->
++        <selectOption selector="{{AdminCartPriceRulesFormSection.coupon}}" userInput="Specific Coupon"
++                      stepKey="selectCouponType"/>
++        <waitForElementVisible selector="{{AdminCartPriceRulesFormSection.couponCode}}"
++                               stepKey="waitForCouponCode"/>
++        <fillField selector="{{AdminCartPriceRulesFormSection.couponCode}}" userInput="{{couponCode}}"
++                   stepKey="fillCouponCode"/>
++        <!-- Provide a discount so the rule is valid. -->
++        <click selector="{{AdminCartPriceRulesFormSection.actionsHeader}}" stepKey="expandActions"/>
++        <selectOption selector="{{AdminCartPriceRulesFormSection.apply}}"
++                      userInput="Fixed amount discount for whole cart" stepKey="selectActionType"/>
++        <fillField selector="{{AdminCartPriceRulesFormSection.discountAmount}}" userInput="1"
++                   stepKey="fillDiscountAmount"/>
++        <click selector="{{AdminCartPriceRulesFormSection.save}}" stepKey="clickSave"/>
++        <waitForElementVisible selector="{{AdminMessagesSection.success}}" stepKey="waitForSuccess"/>
++        <see selector="{{AdminMessagesSection.success}}" userInput="You saved the rule." stepKey="seeSuccess"/>
++    </actionGroup>
++</actionGroups>
+diff --git a/app/code/Magento/SalesRuleStaging/Test/Mftf/Test/AdminStaleTabScheduledUpdateKeepsCartPriceRuleAvailableTest.xml b/app/code/Magento/SalesRuleStaging/Test/Mftf/Test/AdminStaleTabScheduledUpdateKeepsCartPriceRuleAvailableTest.xml
+new file mode 100644
+index 0000000000..77909c9621
+--- /dev/null
++++ b/app/code/Magento/SalesRuleStaging/Test/Mftf/Test/AdminStaleTabScheduledUpdateKeepsCartPriceRuleAvailableTest.xml
+@@ -0,0 +1,145 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!--
++ /**
++ * ADOBE CONFIDENTIAL
++ *
++ * Copyright 2026 Adobe
++ * All Rights Reserved.
++ *
++ * NOTICE: All information contained herein is, and remains
++ * the property of Adobe and its suppliers, if any. The intellectual
++ * and technical concepts contained herein are proprietary to Adobe
++ * and its suppliers and are protected by all applicable intellectual
++ * property laws, including trade secret and copyright laws.
++ * Dissemination of this information or reproduction of this material
++ * is strictly forbidden unless prior written permission is obtained
++ * from Adobe.
++ */
++-->
++<tests xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++       xsi:noNamespaceSchemaLocation="urn:magento:mftf:Test/etc/testSchema.xsd">
++    <test name="AdminStaleTabScheduledUpdateKeepsCartPriceRuleAvailableTest">
++        <annotations>
++            <features value="StagingAndPreview"/>
++            <stories value="Cart Price Rule remains available after a stale-tab scheduled update save race"/>
++            <title value="Cart Price Rule with a coupon survives a two-tab scheduled-update deletion race"/>
++            <description value="A cart price rule with a specific coupon and a scheduled permanent update must
++                remain in the grid after a second tab deletes that update and the first, stale tab saves the
++                already-removed scheduled change followed by the main rule save."/>
++            <severity value="CRITICAL"/>
++            <group value="staging"/>
++        </annotations>
++        <before>
++            <!-- Login as admin -->
++            <actionGroup ref="AdminLoginActionGroup" stepKey="loginAsAdmin"/>
++            <!-- Precondition: advance the global staging version through an applied update. -->
++            <!-- Without an advanced version the new rule stays at the INITIAL version and the race is inert. -->
++            <actionGroup ref="AdminCreateCartPriceRuleWithCouponUsingGroupsWidgetActionGroup"
++                         stepKey="createPreconditionRule">
++                <argument name="ruleName" value="CatPriceRule"/>
++                <argument name="couponCode" value="{{CatPriceRule.coupon_code}}"/>
++            </actionGroup>
++            <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="openGridForPrecondition"/>
++            <actionGroup ref="AdminFilterCartPriceRuleActionGroup" stepKey="filterPreconditionRule">
++                <argument name="ruleName" value="CatPriceRule.name"/>
++            </actionGroup>
++            <!-- Schedule a near-future update so cron can apply it and move the version forward. -->
++            <generateDate date="+1 minute" format="m/j/Y g:i A" stepKey="generatePreconditionStart"/>
++            <click selector="{{AdminStagingSlideOutSection.scheduleNewUpdateBtn}}" stepKey="clickScheduleNewUpdatePre"/>
++            <waitForElementVisible selector="{{AdminStagingSlideOutSection.updateName}}" stepKey="waitUpdateNamePre"/>
++            <fillField selector="{{AdminStagingSlideOutSection.updateName}}"
++                       userInput="{{PreconditionAppliedUpdate.updateName}}" stepKey="fillUpdateNamePre"/>
++            <fillField selector="{{AdminStagingSlideOutSection.updateDescription}}"
++                       userInput="{{PreconditionAppliedUpdate.updateDescription}}" stepKey="fillDescPre"/>
++            <fillField selector="{{AdminStagingSlideOutSection.startDate}}"
++                       userInput="{$generatePreconditionStart}" stepKey="fillStartPre"/>
++            <click selector="{{AdminStagingSlideOutSection.save}}" stepKey="savePreUpdate"/>
++            <waitForPageLoad time="30" stepKey="waitAfterSavePre"/>
++            <!-- Let the update's start time pass, then apply it with the staging cron group. -->
++            <wait time="75" stepKey="waitForPreconditionUpdateStart"/>
++            <magentoCLI command="cron:run" arguments="--group staging" stepKey="cronRunPre1"/>
++            <magentoCLI command="cron:run" arguments="--group staging" stepKey="cronRunPre2"/>
++        </before>
++        <after>
++            <!-- Remove every cart price rule (and its coupons/updates) created by the test via the API. -->
++            <helper class="Magento\SalesRule\Test\Mftf\Helper\SalesRuleApiHelper"
++                    method="deleteAllSalesRulesApi" stepKey="deleteAllRulesViaApi"/>
++            <!-- Log out so the session is clean (runs on whichever tab is active). -->
++            <actionGroup ref="AdminLogoutActionGroup" stepKey="logout"/>
++        </after>
++
++        <!-- Step 1a: create a new cart price rule with a specific coupon code. -->
++        <actionGroup ref="AdminCreateCartPriceRuleWithCouponUsingGroupsWidgetActionGroup"
++                     stepKey="createRuleWithCoupon">
++            <argument name="ruleName" value="TestCartPriceRule"/>
++            <argument name="couponCode" value="{{_defaultCoupon.code}}"/>
++        </actionGroup>
++
++        <!-- Step 1b: schedule a permanent (no end date) far-future update for that rule. -->
++        <actionGroup ref="CreateSalesRulePermanentUpdateActionGroup" stepKey="schedulePermanentUpdate">
++            <argument name="ruleName" value="TestCartPriceRule"/>
++            <argument name="schedule" value="StaleTabPermanentUpdate"/>
++        </actionGroup>
++
++        <!-- Step 2 (Tab A): open the scheduled change into the modal and leave it open. -->
++        <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="tabAOpenGrid"/>
++        <actionGroup ref="AdminFilterCartPriceRuleActionGroup" stepKey="tabAFilter">
++            <argument name="ruleName" value="TestCartPriceRule.name"/>
++        </actionGroup>
++        <click selector="{{AdminScheduledChangesSection.scheduleViewEdit(StaleTabPermanentUpdate.updateName)}}"
++               stepKey="tabAOpenModal"/>
++        <waitForElementVisible selector="{{AdminStagingSlideOutSection.title}}" stepKey="tabAModalVisible"/>
++        <waitForPageLoad stepKey="tabAModalLoaded"/>
++
++        <!-- Step 3 (Tab B): open a second tab on the same rule's edit page. -->
++        <openNewTab stepKey="openTabB"/>
++        <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="tabBOpenGrid"/>
++        <actionGroup ref="AdminFilterCartPriceRuleActionGroup" stepKey="tabBFilter">
++            <argument name="ruleName" value="TestCartPriceRule.name"/>
++        </actionGroup>
++
++        <!-- Step 4 (Tab B): remove the scheduled change from the update, delete the update, then main-save. -->
++        <actionGroup ref="DeleteTheUpdateActionGroup" stepKey="tabBDeleteUpdate">
++            <argument name="fromStaging" value="StaleTabPermanentUpdate"/>
++            <argument name="slideOutHeadingTitle" value="Remove Cart Price Rule from Update"/>
++            <argument name="warningMessageType" value="cart price rule"/>
++        </actionGroup>
++        <click selector="{{AdminCartPriceRulesFormSection.save}}" stepKey="tabBMainSave"/>
++        <waitForElementVisible selector="{{AdminMessagesSection.success}}" stepKey="tabBWaitSaveSuccess"/>
++
++        <!-- Step 5 (Tab A): the modal still shows the now-removed schedule. Save it inside the modal. -->
++        <!-- With the corruption guard in place the stale save is rejected server-side: the slide-out -->
++        <!-- shows an error and stays open. Per the ticket the error is ignored; dismiss the slide-out, -->
++        <!-- then perform the stale main save that used to delete the rule. -->
++        <switchToPreviousTab stepKey="switchBackToTabA"/>
++        <click selector="{{AdminStagingSlideOutSection.save}}" stepKey="tabAModalSave"/>
++        <waitForPageLoad stepKey="tabAAfterModalSave"/>
++        <!-- Observe (but do not assert the exact text of) the rejection error, then close the slide-out. -->
++        <waitForElementVisible selector="{{AdminStagingSlideOutSection.scheduleErrorMessage}}"
++                               stepKey="tabAWaitStaleSaveRejected"/>
++        <waitForElementVisible selector="{{AdminStagingSlideOutSection.activeCloseButton}}"
++                               stepKey="tabAWaitCloseButton"/>
++        <click selector="{{AdminStagingSlideOutSection.activeCloseButton}}" stepKey="tabACloseSlideOut"/>
++        <conditionalClick selector="{{AdminCartPriceRulesFormSection.modalAcceptButton}}"
++                          dependentSelector="{{AdminCartPriceRulesFormSection.modalAcceptButton}}" visible="true"
++                          stepKey="tabAConfirmDiscardIfPrompted"/>
++        <waitForPageLoad stepKey="tabAAfterCloseSlideOut"/>
++        <click selector="{{AdminCartPriceRulesFormSection.save}}" stepKey="tabAMainSave"/>
++        <waitForPageLoad stepKey="tabAAfterMainSave"/>
++
++        <!-- Invariant: the rule must still exist and be visible in the Cart Price Rules grid. -->
++        <!-- Unpatched code deletes the rule here (assertion fails, RED); with the guard it survives (GREEN). -->
++        <waitForElementVisible selector="{{AdminCartPriceRulesSection.filterByNameInput}}"
++                               stepKey="assertWaitForGridControls"/>
++        <actionGroup ref="AdminOpenCartPriceRulesPageActionGroup" stepKey="assertOpenGrid"/>
++        <conditionalClick selector="{{AdminDataGridHeaderSection.clearFilters}}"
++                          dependentSelector="{{AdminDataGridHeaderSection.clearFilters}}" visible="true"
++                          stepKey="assertClearFilters"/>
++        <fillField selector="{{AdminCartPriceRulesSection.filterByNameInput}}"
++                   userInput="{{TestCartPriceRule.name}}" stepKey="assertFilterByName"/>
++        <click selector="{{AdminCartPriceRulesSection.searchButton}}" stepKey="assertSearch"/>
++        <waitForPageLoad stepKey="assertWaitForGrid"/>
++        <seeElement selector="{{AdminCartPriceRulesSection.rowContainingText(TestCartPriceRule.name)}}"
++                    stepKey="assertRuleStillPresentInGrid"/>
++    </test>
++</tests>
+diff --git a/dev/tests/integration/testsuite/Magento/SalesRuleStaging/StaleUpdateTabSaveTest.php b/dev/tests/integration/testsuite/Magento/SalesRuleStaging/StaleUpdateTabSaveTest.php
+new file mode 100644
+index 0000000000..e3a07dbff7
+--- /dev/null
++++ b/dev/tests/integration/testsuite/Magento/SalesRuleStaging/StaleUpdateTabSaveTest.php
+@@ -0,0 +1,408 @@
++<?php
++/**
++ * ADOBE CONFIDENTIAL
++ *
++ * Copyright 2026 Adobe
++ * All Rights Reserved.
++ *
++ * NOTICE: All information contained herein is, and remains
++ * the property of Adobe and its suppliers, if any. The intellectual
++ * and technical concepts contained herein are proprietary to Adobe
++ * and its suppliers and are protected by all applicable intellectual
++ * property laws, including trade secret and copyright laws.
++ * Dissemination of this information or reproduction of this material
++ * is strictly forbidden unless prior written permission is obtained
++ * from Adobe.
++ */
++declare(strict_types=1);
++
++namespace Magento\SalesRuleStaging;
++
++use Magento\Framework\App\Request\Http;
++use Magento\Framework\App\ResourceConnection;
++use Magento\Framework\DB\Adapter\AdapterInterface;
++use Magento\SalesRule\Model\Rule;
++use Magento\SalesRuleStaging\Model\Rule\Retriever;
++use Magento\Staging\Model\EntityStaging;
++use Magento\Staging\Model\VersionHistoryInterface;
++use Magento\Staging\Model\VersionManager;
++use Magento\TestFramework\Helper\Bootstrap;
++use Magento\TestFramework\TestCase\AbstractBackendController;
++
++/**
++ * Reproduces the multi-tab admin race on a Cart Price Rule that carries a scheduled permanent update.
++ *
++ * The rule is scheduled into a permanent update and then a prior request removes it from that update
++ * (both committed, mirroring Tab B's already-finished request). The corrupting step - Tab A saving its
++ * stale snapshot that still references the emptied update - is driven through the REAL admin controller
++ * so the request-bound Hydrator and VersionManager hydrate/version exactly as in production. The rule
++ * must remain visible at the current version and its coupon must not be orphaned.
++ *
++ * @magentoDbIsolation disabled
++ * @magentoAppArea adminhtml
++ * @magentoDataFixture Magento/SalesRule/_files/cart_rule_with_coupon_5_off_no_condition.php
++ */
++class StaleUpdateTabSaveTest extends AbstractBackendController
++{
++    private const APPLIED_VERSION = 1490772480; // Vcur: an already-applied version (> INITIAL)
++    private const FUTURE_UPDATE = 2000000000;   // Uf: permanent future update id (< MAX_VERSION)
++
++    /** @var AdapterInterface */
++    private $connection;
++
++    /** @var int */
++    private $ruleId = 0;
++
++    /** @var int|string|null */
++    private $originalVersionId;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->connection = Bootstrap::getObjectManager()->get(ResourceConnection::class)->getConnection();
++        $this->originalVersionId = Bootstrap::getObjectManager()
++            ->get(VersionHistoryInterface::class)
++            ->getCurrentId();
++    }
++
++    protected function tearDown(): void
++    {
++        $this->cleanupCommittedState();
++        parent::tearDown();
++    }
++
++    /**
++     * Scenario: rule scheduled into a permanent update, then removed from it (both committed); the stale
++     *           tab re-saves the emptied update through the real staging save controller.
++     * Expected: the rule remains visible at the current version and the coupon is not orphaned.
++     */
++    public function testStaleModalSaveAfterRemovalKeepsRuleVisible(): void
++    {
++        $futureRow = $this->prepareRemovedFutureUpdate();
++        $ruleId = $this->ruleId;
++
++        // Tab A: stale modal Save (mode=save) against the now-emptied update Uf, via the real controller.
++        $post = $this->buildStaleRulePost($ruleId, $futureRow);
++        $post['staging'] = [
++            'mode' => 'save',
++            'update_id' => self::FUTURE_UPDATE,
++            'name' => 'Stale tab future update',
++            'start_time' => date('Y-m-d H:i:s', self::FUTURE_UPDATE),
++        ];
++        $this->dispatchPost('backend/salesrulestaging/update/save', $post);
++        $this->dumpRows($ruleId, 'after Tab A stale modal save controller');
++
++        $this->assertRuleStillVisible($ruleId);
++    }
++
++    /**
++     * Scenario: rule scheduled into a permanent update, then removed from it (both committed); the stale
++     *           tab clicks the page main Save while its version pointer still targets the emptied update.
++     * Expected: the rule remains visible at the current version and the coupon is not orphaned.
++     */
++    public function testStaleMainSaveAfterRemovalKeepsRuleVisible(): void
++    {
++        $futureRow = $this->prepareRemovedFutureUpdate();
++        $ruleId = $this->ruleId;
++
++        // Tab A: page main Save while ___version still points at Uf, via the real controller.
++        $post = $this->buildStaleRulePost($ruleId, $futureRow);
++        $this->dispatchPost('backend/sales_rule/promo_quote/save', $post);
++        $this->dumpRows($ruleId, 'after Tab A main save controller');
++
++        $this->assertRuleStillVisible($ruleId);
++    }
++
++    /**
++     * Scenario: the stale tab performs BOTH of its requests in order - the modal Save (which re-schedules
++     *           the rule back into the emptied update) and then the page main Save - the second running
++     *           while the version pointer still targets the future update Uf.
++     * Expected: the rule remains visible at the current version and the coupon is not orphaned.
++     */
++    public function testStaleModalThenMainSaveSequenceKeepsRuleVisible(): void
++    {
++        $futureRow = $this->prepareRemovedFutureUpdate();
++        $ruleId = $this->ruleId;
++        $om = Bootstrap::getObjectManager();
++
++        // Request 1: stale modal Save via the real controller action (mode=save).
++        $modalPost = $this->buildStaleRulePost($ruleId, $futureRow);
++        $modalPost['staging'] = [
++            'mode' => 'save',
++            'update_id' => self::FUTURE_UPDATE,
++            'name' => 'Stale tab future update',
++            'start_time' => date('Y-m-d H:i:s', self::FUTURE_UPDATE),
++        ];
++        $this->executeControllerAction(
++            \Magento\SalesRuleStaging\Controller\Adminhtml\Update\Save::class,
++            $modalPost
++        );
++        $this->dumpRows($ruleId, 'after Tab A request 1 (modal save)');
++
++        // Request 2: page main Save. The stale tab is still positioned on the future version Uf, so the
++        // save runs with the version pointer at Uf (as the future-version edit page would).
++        $om->get(VersionManager::class)->setCurrentVersionId((string)self::FUTURE_UPDATE);
++        $mainPost = $this->buildStaleRulePost($ruleId, $futureRow);
++        $this->executeControllerAction(
++            \Magento\SalesRule\Controller\Adminhtml\Promo\Quote\Save::class,
++            $mainPost
++        );
++        $om->get(VersionManager::class)->setCurrentVersionId((string)self::APPLIED_VERSION);
++        $this->dumpRows($ruleId, 'after Tab A request 2 (main save)');
++
++        $this->assertRuleStillVisible($ruleId);
++    }
++
++    /**
++     * Invoke a real admin controller action directly with the given POST payload (routing bypassed so a
++     * second request can run in-process), preserving the request-bound Hydrator/VersionManager behaviour.
++     *
++     * @param string $actionClass
++     * @param array $post
++     * @return void
++     */
++    private function executeControllerAction(string $actionClass, array $post): void
++    {
++        $request = $this->getRequest();
++        $request->setMethod(Http::METHOD_POST);
++        $request->setPostValue($post);
++        foreach ($post as $key => $value) {
++            $request->setParam($key, $value);
++        }
++        $action = Bootstrap::getObjectManager()->create($actionClass);
++        $result = $action->execute();
++        if ($result instanceof \Magento\Framework\Controller\ResultInterface) {
++            $result->renderResult($this->getResponse());
++        }
++        fwrite(STDERR, "\n[execute $actionClass] body="
++            . substr((string)$this->getResponse()->getBody(), 0, 220) . "\n");
++        $this->getResponse()->clearBody();
++    }
++
++    /**
++     * Scenario: the modal Save errored and was ignored (state stays [Vcur,MAX)); the stale tab then clicks
++     *           the page main Save while still positioned on the future version Uf.
++     * Expected: the rule remains visible at the current version and the coupon is not orphaned.
++     */
++    public function testStaleMainSaveAtFutureVersionAfterRemovalKeepsRuleVisible(): void
++    {
++        $futureRow = $this->prepareRemovedFutureUpdate();
++        $ruleId = $this->ruleId;
++        $om = Bootstrap::getObjectManager();
++
++        // Modal save "errored, ignored": nothing re-created, rule is a single [Vcur,MAX) row. Now the main
++        // save runs with the version pointer still at the future update Uf.
++        $om->get(VersionManager::class)->setCurrentVersionId((string)self::FUTURE_UPDATE);
++        $mainPost = $this->buildStaleRulePost($ruleId, $futureRow);
++        $this->executeControllerAction(
++            \Magento\SalesRule\Controller\Adminhtml\Promo\Quote\Save::class,
++            $mainPost
++        );
++        $om->get(VersionManager::class)->setCurrentVersionId((string)self::APPLIED_VERSION);
++        $this->dumpRows($ruleId, 'after main save at future version');
++
++        $this->assertRuleStillVisible($ruleId);
++    }
++
++    /**
++     * Establish the committed precondition: rule scheduled into permanent update Uf then removed from it.
++     *
++     * @return array the future row snapshot the stale tab would hold (row_id/created_in/updated_in)
++     */
++    private function prepareRemovedFutureUpdate(): array
++    {
++        $om = Bootstrap::getObjectManager();
++        $this->ruleId = (int)$this->connection->fetchOne(
++            "SELECT rule_id FROM salesrule WHERE name = ?",
++            ['cart_rule_with_coupon_5_off_no_condition']
++        );
++        $this->assertNotEmpty($this->ruleId, 'Fixture rule not found.');
++        $ruleId = $this->ruleId;
++
++        /** @var VersionHistoryInterface $versionHistory */
++        $versionHistory = $om->get(VersionHistoryInterface::class);
++        /** @var VersionManager $versionManager */
++        $versionManager = $om->get(VersionManager::class);
++        /** @var Retriever $retriever */
++        $retriever = $om->get(Retriever::class);
++        /** @var EntityStaging $entityStaging */
++        $entityStaging = $om->get(EntityStaging::class);
++
++        // Precondition: an applied update advanced the global staging version past INITIAL.
++        $versionHistory->setCurrentId(self::APPLIED_VERSION);
++        $this->connection->update(
++            'salesrule',
++            ['created_in' => self::APPLIED_VERSION],
++            ['rule_id = ?' => $ruleId]
++        );
++
++        // Create the permanent future update Uf (start only, no end -> permanent).
++        $this->connection->insert('staging_update', [
++            'id' => self::FUTURE_UPDATE,
++            'start_time' => date('Y-m-d H:i:s', self::FUTURE_UPDATE),
++            'name' => 'Stale tab future update',
++            'is_campaign' => 0,
++        ]);
++
++        // Schedule the rule into Uf (splits into rows [Vcur,Uf)+[Uf,MAX)).
++        $versionManager->setCurrentVersionId(self::FUTURE_UPDATE);
++        $rule = $retriever->getEntity($ruleId);
++        $entityStaging->schedule($rule, (string)self::FUTURE_UPDATE, ['copy_origin_in' => self::APPLIED_VERSION]);
++        $versionManager->setCurrentVersionId(self::APPLIED_VERSION);
++        $this->dumpRows($ruleId, 'after schedule into Uf');
++
++        // Snapshot of the FUTURE row the stale tab still holds in its form.
++        $futureRow = $this->connection->fetchRow(
++            "SELECT * FROM salesrule WHERE rule_id = ? AND created_in = ?",
++            [$ruleId, self::FUTURE_UPDATE]
++        );
++        fwrite(STDERR, "\n[Tab A stale snapshot] " . json_encode([
++            'row_id' => $futureRow['row_id'] ?? null,
++            'created_in' => $futureRow['created_in'] ?? null,
++            'updated_in' => $futureRow['updated_in'] ?? null,
++        ]) . "\n");
++
++        // Tab B (already-committed request): remove the rule from update Uf. Row back to [Vcur,MAX).
++        $versionManager->setCurrentVersionId(self::FUTURE_UPDATE);
++        $ruleForRemove = $retriever->getEntity($ruleId);
++        $entityStaging->unschedule($ruleForRemove, (string)self::FUTURE_UPDATE);
++        $versionManager->setCurrentVersionId(self::APPLIED_VERSION);
++        $this->dumpRows($ruleId, 'after Tab B unschedule (committed)');
++
++        return $futureRow ?: [];
++    }
++
++    /**
++     * Assert the ticket invariants: rule visible at current version and coupon not orphaned.
++     *
++     * @param int $ruleId
++     * @return void
++     */
++    private function assertRuleStillVisible(int $ruleId): void
++    {
++        $covering = (int)$this->connection->fetchOne(
++            "SELECT COUNT(*) FROM salesrule WHERE rule_id = ? AND created_in <= ? AND updated_in > ?",
++            [$ruleId, self::APPLIED_VERSION, self::APPLIED_VERSION]
++        );
++        $orphanCoupons = (int)$this->connection->fetchOne(
++            "SELECT COUNT(*) FROM salesrule_coupon c
++             LEFT JOIN salesrule s
++               ON s.rule_id = c.rule_id AND s.created_in <= ? AND s.updated_in > ?
++             WHERE c.rule_id = ? AND s.rule_id IS NULL",
++            [self::APPLIED_VERSION, self::APPLIED_VERSION, $ruleId]
++        );
++        fwrite(STDERR, "\n[RESULT] coveringRows=$covering orphanCoupons=$orphanCoupons\n");
++
++        $this->assertGreaterThan(
++            0,
++            $covering,
++            'Cart Price Rule must remain visible at the current version after a stale-tab save.'
++        );
++        $this->assertSame(
++            0,
++            $orphanCoupons,
++            'Coupon must not be orphaned (must still resolve to a visible rule row).'
++        );
++    }
++
++    /**
++     * Build a stale rule POST payload carrying the future row's link-field (row_id) and created_in=Uf.
++     *
++     * @param int $ruleId
++     * @param array $futureRow
++     * @return array
++     */
++    private function buildStaleRulePost(int $ruleId, array $futureRow): array
++    {
++        return [
++            'rule_id' => $ruleId,
++            'row_id' => $futureRow['row_id'] ?? null,
++            'created_in' => self::FUTURE_UPDATE,
++            VersionManager::PARAM_NAME => self::FUTURE_UPDATE,
++            'name' => 'cart_rule_with_coupon_5_off_no_condition',
++            'is_active' => 1,
++            'website_ids' => [1],
++            'customer_group_ids' => [0, 1, 2, 3],
++            'coupon_type' => Rule::COUPON_TYPE_SPECIFIC,
++            'simple_action' => Rule::CART_FIXED_ACTION,
++            'discount_amount' => 5,
++            'discount_step' => 0,
++            'stop_rules_processing' => 1,
++            'uses_per_customer' => 0,
++            'uses_per_coupon' => 0,
++        ];
++    }
++
++    /**
++     * Dispatch a single admin POST and report route, http code and response body for diagnostics.
++     *
++     * @param string $uri
++     * @param array $post
++     * @return void
++     */
++    private function dispatchPost(string $uri, array $post): void
++    {
++        $request = $this->getRequest();
++        $request->setMethod(Http::METHOD_POST);
++        $request->setPostValue($post);
++        foreach ($post as $key => $value) {
++            $request->setParam($key, $value);
++        }
++        $this->dispatch($uri);
++
++        $response = $this->getResponse();
++        $code = method_exists($response, 'getHttpResponseCode') ? $response->getHttpResponseCode() : 'n/a';
++        fwrite(STDERR, "\n[dispatch $uri] http=$code route="
++            . $request->getModuleName() . '/' . $request->getControllerName() . '/' . $request->getActionName()
++            . " body=" . substr((string)$response->getBody(), 0, 220) . "\n");
++    }
++
++    /**
++     * Dump the salesrule version rows for the given rule to STDERR.
++     *
++     * @param int $ruleId
++     * @param string $label
++     * @return void
++     */
++    private function dumpRows(int $ruleId, string $label): void
++    {
++        $rows = $this->connection->fetchAll(
++            "SELECT row_id, rule_id, created_in, updated_in FROM salesrule WHERE rule_id = ? ORDER BY created_in",
++            [$ruleId]
++        );
++        fwrite(STDERR, "\n[$label] Vcur=" . self::APPLIED_VERSION . " Uf=" . self::FUTURE_UPDATE . "\n");
++        foreach ($rows as $r) {
++            fwrite(STDERR, sprintf(
++                "  row_id=%s rule_id=%s created_in=%s updated_in=%s\n",
++                $r['row_id'],
++                $r['rule_id'],
++                $r['created_in'],
++                $r['updated_in']
++            ));
++        }
++    }
++
++    /**
++     * Remove all committed rows this test created and restore the global staging version pointer.
++     *
++     * @return void
++     */
++    private function cleanupCommittedState(): void
++    {
++        try {
++            $connection = Bootstrap::getObjectManager()->get(ResourceConnection::class)->getConnection();
++            if ($this->ruleId) {
++                $connection->delete('salesrule_coupon', ['rule_id = ?' => $this->ruleId]);
++                $connection->delete('salesrule', ['rule_id = ?' => $this->ruleId]);
++            }
++            $connection->delete('staging_update', ['id = ?' => self::FUTURE_UPDATE]);
++            if ($this->originalVersionId !== null) {
++                Bootstrap::getObjectManager()
++                    ->get(VersionHistoryInterface::class)
++                    ->setCurrentId($this->originalVersionId);
++            }
++        } catch (\Throwable $e) {
++            fwrite(STDERR, "\n[cleanup error] " . $e->getMessage() . "\n");
++        }
++    }
++}

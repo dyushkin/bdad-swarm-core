@@ -1,0 +1,135 @@
+diff --git a/lib/internal/Magento/Framework/Test/Unit/Validator/HTML/ConfigurableWYSIWYGValidatorTest.php b/lib/internal/Magento/Framework/Test/Unit/Validator/HTML/ConfigurableWYSIWYGValidatorTest.php
+index f6f87b3ba84..7fae17b97f8 100644
+--- a/lib/internal/Magento/Framework/Test/Unit/Validator/HTML/ConfigurableWYSIWYGValidatorTest.php
++++ b/lib/internal/Magento/Framework/Test/Unit/Validator/HTML/ConfigurableWYSIWYGValidatorTest.php
+@@ -263,6 +263,78 @@ class ConfigurableWYSIWYGValidatorTest extends TestCase
+                 true,
+                 [],
+                 []
++            ],
++            'malformed-multiple-body-hidden-in-apostrophes' => [
++                ['p'],
++                ['title'],
++                ['p' => ['title']],
++                "<body>ok</body><p title='<body>'>x</p>",
++                false,
++                [],
++                []
++            ],
++            'malformed-multiple-body-hidden-in-double-quotes' => [
++                ['p'],
++                ['title'],
++                ['p' => ['title']],
++                '<body>ok</body><p title="<body>">x</p>',
++                false,
++                [],
++                []
++            ],
++            'event-handler-smuggling-masked-by-stray-apostrophes' => [
++                ['p', 'img'],
++                ['title'],
++                ['p' => ['title'], 'img' => ['title']],
++                "<p>It's</p><img/onerror=foo(1) title='x'>",
++                false,
++                [],
++                []
++            ],
++            'event-handler-smuggling-hidden-by-unbalanced-in-text-quote' => [
++                ['p', 'img'],
++                ['title'],
++                ['p' => ['title'], 'img' => ['title']],
++                '<p>x="</p><img/onerror=foo(1) title="y">',
++                false,
++                [],
++                []
++            ],
++            'event-handler-smuggling-hidden-by-unbalanced-in-text-apostrophe' => [
++                ['p', 'img'],
++                ['title'],
++                ['p' => ['title'], 'img' => ['title']],
++                "<p>x='</p><img/onerror=foo(1) title='y'>",
++                false,
++                [],
++                []
++            ],
++            'malformed-multiple-body-hidden-by-unbalanced-in-text-quote' => [
++                ['p'],
++                ['title'],
++                ['p' => ['title']],
++                '<body>a</body><p>x="</p><body>b</body>',
++                false,
++                [],
++                []
++            ],
++            'text-with-attribute-like-double-quoted-syntax-is-valid' => [
++                ['p'],
++                [],
++                [],
++                '<p>Use attr="value" in your HTML</p>',
++                true,
++                [],
++                []
++            ],
++            'text-with-attribute-like-single-quoted-syntax-is-valid' => [
++                ['p'],
++                [],
++                [],
++                "<p>Write style='color:red' like this</p>",
++                true,
++                [],
++                []
+             ]
+         ];
+     }
+diff --git a/lib/internal/Magento/Framework/Validator/HTML/ConfigurableWYSIWYGValidator.php b/lib/internal/Magento/Framework/Validator/HTML/ConfigurableWYSIWYGValidator.php
+index 7511b899997..72e1d1c155a 100644
+--- a/lib/internal/Magento/Framework/Validator/HTML/ConfigurableWYSIWYGValidator.php
++++ b/lib/internal/Magento/Framework/Validator/HTML/ConfigurableWYSIWYGValidator.php
+@@ -31,6 +31,13 @@ class ConfigurableWYSIWYGValidator implements WYSIWYGValidatorInterface
+     private static string $contentFiltrationPattern =
+         '#<\w+[^>]*/[^\s/>]+/[^>]*=|<\w+/[^\s>]*on\w+\s*=|<\w+[^>]*//[^>]*=|(<body)#i';
+ 
++    /**
++     * Pattern matching a start tag together with its complete quoted attribute values
++     *
++     * @var string
++     */
++    private static string $startTagPattern = '/<\w+(?:"[^"]*"|\'[^\']*\'|[^>"\'])*>/';
++
+     /**
+      * @var string[]
+      */
+@@ -273,14 +280,31 @@ class ConfigurableWYSIWYGValidator implements WYSIWYGValidatorInterface
+     }
+ 
+     /**
+-     * Blank out quoted attribute values so their content cannot trigger malformed-syntax detection.
++     * Blank quoted attribute values that occur inside a start tag before malformed-syntax detection.
++     *
++     * Only values bound to an attribute within a start tag are masked, so quotes or apostrophes in text can
++     * no longer hide a payload from the filter. Smuggled tag-open sequences (e.g. "<body", "<img") inside a
++     * masked value are preserved so they are still detected.
+      *
+      * @param string $content
+      * @return string
+      */
+     private function maskQuotedAttributeValues(string $content): string
+     {
+-        return (string) preg_replace('/"[^"]*"|\'[^\']*\'/', '""', $content);
++        return (string) preg_replace_callback(
++            self::$startTagPattern,
++            function (array $startTag): string {
++                return (string) preg_replace_callback(
++                    '/"[^"]*"|\'[^\']*\'/',
++                    function (array $value): string {
++                        preg_match_all('/<\w+/', $value[0], $preservedTags);
++                        return '"' . implode('', $preservedTags[0]) . '"';
++                    },
++                    $startTag[0]
++                );
++            },
++            $content
++        );
+     }
+ 
+     /**
