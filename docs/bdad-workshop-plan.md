@@ -6,7 +6,7 @@
 | **Audience** | L4 support engineers, dev leads, anyone evaluating agentic development for Adobe Commerce tickets. |
 | **Duration** | ~90 minutes (60 min content + 30 min dry run & discussion). Timings below are a suggested split. |
 | **Last updated** | 2026-11-08 |
-| **Companions** | `docs/bdad-roadmap.md` (architecture + backlog), `docs/bdad-changelog.md` (history), `docs/bdad-new-ticket-runbook.md` (how to run a ticket), `docs/mig/impact-graph-proposal.md` + `docs/mig/mig-phase0-spec.md` (MIG), `docs/geth_architecture_multi_agent_swarm_synthesis.md` (philosophy), `.github/agents/*.agent.md` (the VIs) |
+| **Companions** | `bdad-roadmap.md` (architecture + backlog), `docs/bdad-changelog.md` (history), `docs/bdad-new-ticket-runbook.md` (how to run a ticket), `docs/mig/impact-graph-proposal.md` + `docs/mig/mig-phase0-spec.md` (MIG), `docs/geth_architecture_multi_agent_swarm_synthesis.md` (philosophy), `.github/agents/*.agent.md` (the VIs) |
 
 > **Evidence discipline for this document.** Statements are tagged where it matters:
 > **[shipped]** = implemented and in the repo today · **[measured]** = from a recorded A/B run ·
@@ -225,7 +225,7 @@ Its problems were structural, not cosmetic:
 
 The monolith was decomposed into **six specialist Virtual Intelligences**, each a
 `.github/agents/*.agent.md` profile that is the *authoritative, complete* source for its domain
-**[shipped]**. `.claude/CLAUDE.md` became a thin router — a Swarm table plus always-in-force
+**[shipped]**. `../.claude/CLAUDE.md` became a thin router — a Swarm table plus always-in-force
 non-negotiables. A dispatched subagent loads **only its own profile plus the router**, not its siblings'.
 
 ```
