@@ -1,8 +1,165 @@
-# BDAD Swarm — Workshop Plan, Theses & ACP2E-5537 Dry Run
+# BDAD Swarm — Project Description
 
-## 2. Segment 1 — TDD, and the transition to BDD
+| | |
+|---|---|
+| **What this is** | An extended description of the BDAD Swarm project: a toolkit for AI-assisted development and artifact gathering — what it does, why it is built this way, how work flows through it today, what it leaves behind, and where it is going. |
+| **Who it is for** | Engineers and dev leads evaluating agentic development, and anyone who has to trust — or review — a change an AI helped produce. |
+| **Last updated** | 2026-11-16 |
+| **Companions** | `docs/bdad-roadmap.md` (architecture + backlog), `docs/bdad-changelog.md` (history), `docs/bdad-new-ticket-runbook.md` (how to run a ticket), `docs/mig/impact-graph-proposal.md` + `docs/mig/mig-phase0-spec.md` (MIG), `docs/geth_architecture_multi_agent_swarm_synthesis.md` (philosophy), `.github/agents/*.agent.md` (the VIs) |
 
-### 2.1 TDD in one slide
+> **Evidence discipline for this document.** Statements are tagged where it matters:
+> **[shipped]** = implemented and in the repo today · **[measured]** = from a recorded A/B run ·
+> **[planned]** = roadmap item, not built · **[projection]** = estimate, not yet validated.
+> That discipline is load-bearing — the credibility of the whole approach depends on not overselling
+> the parts that are still design.
+
+---
+
+## 0. Contents
+
+| # | Section | What it answers |
+|---|---|---|
+| 1 | [**Introduction — the toolkit**](#1-segment-1--introduction-a-toolkit-for-ai-assisted-development-and-artifact-gathering) | What does BDAD produce, what goes wrong without it, and what are its working parts? |
+| 2 | [TDD, and the transition to BDD](#2-segment-2--tdd-and-the-transition-to-bdd) | Why do we start from behavior, not from code? |
+| 3 | [How mono was created, how it split](#3-segment-3--how-mono-was-created-how-it-split-and-what-the-split-bought) | Why split one prompt into six specialists, and what did it buy? |
+| 4 | [Current workflow: Sequential Waterfall](#4-segment-4--current-workflow-sequential-waterfall-with-a-centralized-orchestrator) | How does work actually flow today, and where are the gates? |
+| 5 | [MIG and blast radius](#5-segment-5--mig-and-blast-radius-instead-of-blind-grep) | Why is `grep` structurally insufficient in Magento? |
+| 6 | [The agents](#6-segment-6--the-agents) | Who owns which decision, and where does each one stop? |
+| 7 | [**The artifact corpus**](#7-segment-7--the-artifact-corpus-retrospectives-diffs-and-reusable-evidence) | What does a run leave behind, and why is that half the point? |
+| 8 | [Future: Stigmergic Blackboard](#8-segment-8--future-from-sequential-waterfall-to-a-stigmergic-blackboard-planned) | Why move off the central Orchestrator? |
+| 9 | [Future: MIG Phases 1–3](#9-segment-9--future-mig-phases-planned) | Where does the impact graph go next? |
+| 10 | [**Walkthrough: ACP2E-5537**](#10-segment-10--walkthrough-a-real-ticket-acp2e-5537) | What does all of this look like end to end on real work? |
+| 11 | [Objections and open questions](#11-objections-and-open-questions) | Where does this break, and what are we not claiming? |
+
+---
+## 1. Segment 1 — Introduction: a toolkit for AI-assisted development and artifact gathering
+
+**BDAD — Behavior Driven Agentic Development — is a toolkit for AI-assisted development that treats the
+*record of the work* as a deliverable equal in weight to the code.**
+
+It exists because AI assistance has an asymmetric failure profile: generating a plausible change is
+cheap and fast, while *establishing that the change is correct* and *retaining why it is correct* are
+neither. BDAD is the set of mechanisms that make the second and third parts as routine as the first.
+
+Two things come out of every run, and the second is the one that compounds:
+
+| Output | What it is | Lifetime |
+|---|---|---|
+| **A verified change** | A diff that is preceded by a failing test, bounded by a derived impact set, and passed through deterministic validation | Until the next refactor |
+| **A durable artifact** | The behavior description, the execution log, the verification evidence, the near-misses, the frozen diff, and the corrections the method itself earned | Indefinite — and reusable as input |
+
+### 1.1 The unit of work is a behavior, not a file
+
+Work does not start from "change this class" or from an open-ended question to a model. It starts from
+a **described behavior**: a concrete, reproducible statement of what someone does and what the system is
+supposed to do in response. Everything downstream — the failing test, the impact analysis, the patch,
+the verdict, the written record — is derived from that description and checked back against it.
+
+That single constraint is what makes the rest mechanizable. A behavior can be executed, so it can be
+proven absent and then proven present. A prompt cannot.
+
+### 1.2 What goes wrong without a toolkit
+
+Unassisted AI development fails in characteristic ways, and all of them are quiet — they produce
+confident output, not errors:
+
+| Failure | What it looks like |
+|---|---|
+| **Unverifiable success** | A plausible change with no failing test preceding it. Nothing establishes that the problem existed, or that it is gone. |
+| **Tautological verification** | A test written *after* and *from* the implementation. It restates the code and can never fail for the reason that matters (§2.2). |
+| **Invisible blast radius** | `grep` finds direct callers. It does not find `di.xml` plugins, `events.xml` observers, or preferences — in a framework built on indirection, the dangerous edges are largely grep-invisible. |
+| **Context collapse** | One unbroken session accumulates the whole history; consumption and error rate both scale with context, and attention to the original behavior degrades as the window fills. |
+| **Evaporating reasoning** | The expensive part is discovering the non-obvious constraint. When the session ends, that discovery is gone and the next piece of work in the same area starts from zero. |
+| **Unbounded autonomy** | Nothing stands between a confident model and a destructive action against a live environment. |
+
+BDAD is the set of constraints that makes each of those structurally hard rather than merely
+discouraged.
+
+### 1.3 The four working parts
+
+The toolkit rests on four mechanisms. The rest of this document is, in effect, an expansion of each.
+
+**1 · Behavior first — TDD and BDD, applied to agents (§2).**
+The described behavior is turned into an executable, *failing* test before any production code is
+written. TDD supplies the Red-Green discipline; BDD supplies the agreement layer, so "done" is not a
+matter of opinion. The agentic addition is **separation of authorship**: the agent that writes the test
+and the agent that writes the implementation are different agents with different contexts, and neither
+may relax the other's artifact.
+
+**2 · Mechanically narrowed context — MIG (§5).**
+The Magento Impact Graph (`dev/tools/impact-graph/`) reads `di.xml`, `events.xml` and MFTF metadata to
+derive the blast radius of a change *deterministically* — which plugins intercept this method, which
+observers listen on this event, which mocks go stale, which MFTF groups are implicated. This serves two
+purposes at once: it finds edges `grep` cannot see, and it **bounds what any agent needs to read**.
+Context is narrowed by evidence instead of by guesswork — which is simultaneously a correctness
+mechanism and the main lever on consumption.
+
+**3 · Artifact gathering as a first-class output — retrospectives and frozen diffs (§7).**
+Every completed run leaves a folder under `docs/retrospectives/<ID>/` holding the reproduction steps,
+the phase-by-phase execution log, the summary with verification commands *and their results*, the
+retrospective proper, and the **frozen `git show` diff** of what shipped. The diff is reconstructible
+from version control; the reasoning, the near-misses, and the corrections to the method are not. The
+corpus is treated as an input to future runs, not an archive of past ones.
+
+**4 · Specialization and human gates (§4, §6).**
+Six specialized Virtual Intelligences — Orchestrator, Scribe, Dependency Tracer, Test Author, Patch
+Generator, Consensus Gateway — each own a narrow domain, declared in `.github/agents/*.agent.md`. Each
+runs in its own context window, which is both a token mechanism and an integrity mechanism. The pipeline
+passes through **four mandatory human stop points**, so no run mutates state, commits, or publishes
+without explicit approval.
+
+### 1.4 How the pieces fit together
+
+```
+          DESCRIBED BEHAVIOR  (what someone does / what should happen)
+                │
+                ├──────────────► 2 · MIG derives the blast radius  ──────┐
+                │                    (deterministic, not grep)           │  bounds
+                │                                                        │  context
+                ▼                                                        ▼
+            1 · Failing test written from the behavior  ───►  change written by a
+                (Test Author)          RED                     different agent
+                                                               (Patch Generator)
+                                                                    GREEN
+                                        │                              │
+                                        └───────────┬──────────────────┘
+                                                    ▼
+                                    4 · deterministic validation + human gates
+                                                    │
+                                                    ▼
+                                    3 · retrospective + frozen diff
+                                                    │
+                                                    └──► input to the next run
+```
+
+### 1.5 Where it lives, and what it is not
+
+- **Sidecar, not a fork.** The whole swarm infrastructure lives in a standalone repository
+  (`bdad-swarm-core`) and is projected into the working checkout via symlinks, with `.git/info/exclude`
+  cloaking. The target repository stays clean — no agent configuration is ever committed into product
+  code.
+- **Domain-shaped, not domain-locked.** The method is general; MIG is not. Impact derivation is built
+  against Adobe Commerce's specific indirection mechanisms, and porting the approach elsewhere means
+  writing the equivalent resolver for that framework.
+- **It is not autonomous.** There is no unattended mode. The four stop points are part of the product,
+  not an inconvenience to be optimized away.
+- **It is not a smarter model.** On the one controlled A/B we have run (§3), correctness was a *tie*
+  between a single-prompt run and the swarm. The measured advantages were token economics, safety, an
+  extra layer of test coverage, and a reusable record — not raw cleverness.
+- **It is not finished.** The current architecture is a sequential waterfall with a central
+  Orchestrator; §8 explains why that is a bottleneck and what replaces it. MIG is at Phase 0 of four
+  (§9). Claims in this document are tagged accordingly.
+
+**In one sentence:**
+> BDAD replaces "ask an AI to make the change" with a gated toolchain where *behavior is agreed first*,
+> *blast radius is derived mechanically*, *a failing test exists before any implementation*, *a human
+> approves at four points*, and *the reasoning survives the session as a reusable artifact*.
+
+---
+
+## 2. Segment 2 — TDD, and the transition to BDD
+
+### 2.1 TDD in short
 
 The classic **Red-Green-Refactor** loop:
 
@@ -19,7 +176,7 @@ Applied naively to AI coding, TDD degrades in a specific way: *an agent that own
 patch can always reach Green.* It can weaken an assertion, narrow a fixture, or assert the buggy behavior
 it just observed. Green then proves only internal consistency — not that the customer's problem is solved.
 
-Two failure modes to name explicitly in the room:
+Two failure modes are worth naming explicitly:
 
 - **Tautological Green** — the test encodes the implementation, so it can never fail for the reason
   that matters.
@@ -139,8 +296,7 @@ The Red-Green-Refactor engine is unchanged and still mandatory **[shipped]** —
 above it, not a replacement.
 
 ---
-
-## 3. Segment 2 — How mono was created, how it split, and what the split bought
+## 3. Segment 3 — How mono was created, how it split, and what the split bought
 
 ### 3.1 The mono era
 
@@ -159,7 +315,7 @@ Its problems were structural, not cosmetic:
 
 The monolith was decomposed into **six specialist Virtual Intelligences**, each a
 `.github/agents/*.agent.md` profile that is the *authoritative, complete* source for its domain
-**[shipped]**. `../.claude/CLAUDE.md` became a thin router — a Swarm table plus always-in-force
+**[shipped]**. `.claude/CLAUDE.md` became a thin router — a Swarm table plus always-in-force
 non-negotiables. A dispatched subagent loads **only its own profile plus the router**, not its siblings'.
 
 ```
@@ -247,8 +403,7 @@ worktrees and Docker stacks, with the configuration as the only independent vari
 > or wall-clock time.
 
 ---
-
-## 4. Segment 3 — Current workflow: Sequential Waterfall with a centralized Orchestrator
+## 4. Segment 4 — Current workflow: Sequential Waterfall with a centralized Orchestrator
 
 ### 4.1 The canonical chain **[shipped]**
 
@@ -330,7 +485,7 @@ worktrees and Docker stacks, with the configuration as the only independent vari
                     ╰────────────────────────────╯
 ```
 
-**How to read it in the room:** the **solid downward spine is the waterfall** — strictly sequential, one
+**How to read it:** the **solid downward spine is the waterfall** — strictly sequential, one
 specialist at a time. The **two loop-backs are the only cycles**, and they mean different things:
 **A** is healthy design iteration; **B** is a defect in the pipeline itself. The **four `✋` diamonds are
 the only places the workflow can advance past a decision**, and each requires explicit human go-ahead.
@@ -356,8 +511,11 @@ Red-Green-Refactor sequencing, stop-point gating, and usage logging.
    context **[measured]**.
 2. **Context serialization loss.** Passing structural codebase state as conversational prose is a game of
    telephone; structural nuance degrades at each hop.
-3. **Philosophical contradiction.** A central routing manager violates the Resonance and Stigmergy axioms.
-   It is a hierarchical pipeline wearing a swarm's name.
+3. **Philosophical contradiction.** A central routing manager violates the two design principles the
+   project took from its origin concept (`docs/geth_architecture_multi_agent_swarm_synthesis.md`):
+   *consensus by resonance* — decisions emerge from convergence, not from a central vote-counter — and
+   *stigmergic collaboration* — units mutate a shared environment rather than passing point-to-point
+   messages. Today's pipeline is a hierarchy wearing a swarm's name. §8 is the answer to this.
 
 **Thesis for the segment:**
 > Today's architecture is a *waterfall with gates* — deliberately chosen for auditability and human
@@ -365,12 +523,11 @@ Red-Green-Refactor sequencing, stop-point gating, and usage logging.
 > remove the hub.
 
 ---
-
-## 5. Segment 4 — MIG and blast radius, instead of blind grep
+## 5. Segment 5 — MIG and blast radius, instead of blind grep
 
 ### 5.1 The motivating failure
 
-This is the strongest segment of the workshop because it is grounded in a real regression. On
+This part of the method is grounded in a real regression. On
 **ACP2E-5180**, the agent edited `Order\Item::getQtyToCancel()` and validated only what it could
 *see by grep*. The dependency that broke was indirect:
 
@@ -422,11 +579,11 @@ Two design decisions worth calling out:
 - **Definition of Done was a replay of a real failure** — run against the ACP2E-5180 diff it must return
   *both* the MSI acceptance test *and* flag the stale mock, before a line of fix is written.
 
-### 5.4 Worked examples — run these live
+### 5.4 Worked examples
 
 All outputs below were executed against this branch on **2026-11-08** and are reproduced verbatim
-(paths shortened). Running two or three of these live is more convincing than any slide; examples 1 and 2
-are the recommended pair, because together they *are* the ACP2E-5180 regression.
+(paths shortened). Examples 1 and 2 are the pair worth starting from, because together they *are* the
+ACP2E-5180 regression.
 
 #### Example 1 — `--event`: the observer grep could not find
 
@@ -515,7 +672,7 @@ stubs:
   - receiver=$renderer  methods=render
 ```
 
-**The point:** this is the ACP2E-5537 unit test from §9. Its entire mocked surface is one collaborator
+**The point:** this is the ACP2E-5537 unit test from §10. Its entire mocked surface is one collaborator
 stubbing one method. If a fix introduced a new dependency, this test would fail on an unstubbed call —
 and `--mock-impact <git-ref>` flags that class of break *before* the suite is ever run.
 
@@ -567,8 +724,7 @@ attribution is a listed requirement and not an implementation detail.
 > neither a human nor a model can reliably avoid by reading harder.
 
 ---
-
-## 6. Segment 5 — The agents
+## 6. Segment 6 — The agents
 
 Each VI is a profile file, model-tiered by the kind of thinking it does: reasoning-heavy on Opus,
 coordination/prose on Sonnet, mechanical validation on Haiku **[shipped]**.
@@ -633,11 +789,11 @@ coordination/prose on Sonnet, mechanical validation on Haiku **[shipped]**.
      │  ✓ auditable: one place owns state, gating and sequencing       │
      │  ✗ every artifact is re-serialized as prose through the hub     │
      │  ✗ hub context grows with the ticket → cache-read volume        │
-     │  ✗ violates Resonance + Stigmergy axioms (see §7)               │
+     │  ✗ violates Resonance + Stigmergy axioms (see §8)               │
      └─────────────────────────────────────────────────────────────────┘
 ```
 
-**The load-bearing observation for §7:** the spokes are **isolated by construction** — the Test Author
+**The load-bearing observation for §8:** the spokes are **isolated by construction** — the Test Author
 never sees the Dependency Tracer's output except as prose the hub pasted in. That isolation is exactly
 what gives us separated authorship, *and* exactly what forces every byte of shared state through one
 growing context. The Blackboard keeps the first property and discards the second.
@@ -655,10 +811,121 @@ growing context. The Blackboard keeps the first property and discards the second
 > auditable — and what makes a missed defect attributable to a specific specialist.
 
 ---
+## 7. Segment 7 — The artifact corpus: retrospectives, diffs, and reusable evidence
 
-## 7. Segment 6 — Future: from Sequential Waterfall to a Stigmergic Blackboard **[planned]**
+> Everything up to this point described how a fix is produced. This section describes what the run
+> leaves behind — and makes the central claim of the project: **the swarm's output is not a patch, it is
+> a patch plus the record of why it is correct.** Read backwards, the gates and specialists in §2–§6 are
+> *how that record gets made*, not bureaucracy layered on top of a fix. Read forwards, the corpus is an
+> input to the next ticket.
 
-### 7.1 The concept
+### 7.1 What a completed run leaves behind **[shipped]**
+
+Every BDAD ticket produces a durable folder under `docs/retrospectives/<TICKET>/`:
+
+```
+docs/
+├── retrospectives/
+│   ├── ACP2E-5180/
+│   │   ├── retrospective.md          ← the run record (root cause, journey, verdict)
+│   │   └── ACP2E-5180.diff           ← the shipped commit, frozen alongside its reasoning
+│   ├── ACP2E-5203/ · ACP2E-5245/ · ACP2E-5351/        (retrospective.md + .diff)
+│   ├── ACP2E-5216/ · ACP2E-5421/                      (retrospective.md)
+│   ├── ACP2E-5537/
+│   │   ├── retrospective.md
+│   │   ├── ACP2E-5537.diff
+│   │   └── AddProductsToCartErrorTest.php  ← artifact the release-line PR could NOT carry
+│   ├── postmortem-ACP2E-5216.md · -5239.md · -5252.md · -5288.md
+│   └── bdad-swarm-report-ACP2E-5252.md
+└── experiments/
+    └── acp2e-5288-mono-vs-swarm/     ← the A/B: CLAUDE-mono.md + docs-mono/ + docs-swarm/
+                                        both runs' diffs, retrospectives and usage reports
+```
+
+**Current corpus: 7 ticket folders, 6 frozen `.diff` files, 4 postmortems, and one controlled
+experiment** — the A/B that §3 quotes.
+
+### 7.2 The four parts of a retrospective
+
+Each `retrospective.md` is written by the **Scribe at egress (STEP 6)** and carries four distinct
+payloads. Keeping them separate is what makes the document reusable rather than a diary:
+
+| Part | Contains | Who consumes it later |
+|---|---|---|
+| **1 · Manual Steps to Reproduce** | Exact preconditions, config toggles, request/mutation, expected vs actual | **QE** — pasted into the ticket verbatim; the same steps that drove the Red test |
+| **2 · Execution log** | Phase-by-phase table: Intake → P0 → R1 (Red) → G1 (Green) → G2 (cross-domain) → V1/V2 (validate), each with its outcome | **The next run** — shows which probes paid off and which were dead ends |
+| **3 · Summary** | Executive summary, the change, verification commands **with results**, deliberate divergences, follow-ups | **Reviewers and release notes** — the "why", not just the "what" |
+| **4 · Retrospective proper** | Two audiences: lessons about **the ticket** (domain traps) and lessons about **the Swarm** (process misses, rule changes) | **The method itself** — this is the feedback loop into `.github/agents/*.agent.md` |
+
+The frozen `.diff` is the fifth artifact and the anchor for all of them: full `git show` output —
+commit SHA, author, date, and the complete message explaining the reasoning — so the record never drifts
+from the code it describes, even after branches are deleted or rebased.
+
+### 7.3 Why the corpus is an input, not just an output
+
+This is the segment's central claim, and it is the one to spend time on:
+
+> **A retrospective is a cache of expensive reasoning.** The costly part of an L4 ticket is rarely typing
+> the patch — it is discovering the non-obvious constraint. Writing that discovery down in a structured,
+> greppable, *indexed* location means the next ticket in the same area starts from the answer.
+
+Concretely, the corpus is consumed four ways:
+
+1. **Domain priors for the Dependency Tracer.** ACP2E-5180's retrospective is why plugin/observer
+   indirection became a Phase 0 requirement — the regression is documented with its full edge chain, so
+   MIG's Definition of Done could be written as *"replay this exact failure."*
+2. **Reusable test vehicles.** ACP2E-5537 archived `AddProductsToCartErrorTest.php` beside its
+   retrospective precisely **because the release-line PR could not carry it** (sparta backports ship
+   production files only). Without the corpus that test would simply have been lost.
+3. **Process corrections that become rules.** Each run's "lessons about the Swarm" is the raw material
+   for roadmap items and profile edits — the changelog in `docs/bdad-changelog.md` is downstream of these.
+4. **Semantic retrieval.** The folders live in the indexed repo, so an agent can retrieve
+   *"have we touched cart error codes before?"* and land on prior evidence rather than re-deriving it.
+
+### 7.4 Worked example — ACP2E-5537's retrospective **[shipped]**
+
+The walkthrough in §10 follows this ticket as a *method demonstration*. The ticket has since been **completed**,
+and its real record (`docs/retrospectives/ACP2E-5537/retrospective.md`, v1.1, 2026-11-12) is the better
+advertisement for the corpus, because its most valuable section is one the diff cannot show.
+
+The shipped change is tiny — **13 insertions / 1 deletion** across 1 production class and 2 GraphQL
+schemas. The retrospective's §4 is titled *"What a mechanical cherry-pick would have shipped"* and records
+three defects that the diff alone does not reveal:
+
+| # | Finding | Why it matters |
+|---|---|---|
+| **4.1** | 2.4-develop keeps the mapping in a DI-configured `errorMessageCodesMapper`; 2.4.7-p10 keeps it in a `private const MESSAGE_CODES`. Porting the `di.xml` hunk would have configured a constructor parameter that does not exist. | **This is why the automated backport tool failed** — the record explains the tool's failure instead of just noting it |
+| **4.2** | `user_errors.code` is a non-nullable enum. Emitting a new code without extending `CartUserInputErrorType` would have turned *a wrong error code* into *a failed mutation* — strictly worse. And `WishlistGraphQl` consumes the same class through a **separate** enum. | A latent runtime break, caught at the cross-domain gate, that the parent fix **still carries today** on the wishlist path |
+| **4.3** | The upstream test is unrunnable on p10: wrong constructor, asserts `Phrase` handling that does not exist, reads `di.xml` by XPath, and uses a PHPUnit 10+ attribute against a branch pinned to `^9.5`. | Explains why a *fresh* test was written — and why it deliberately avoids data providers entirely |
+
+The same document also records the **delivery corrections** (§9 of that file): the fix was first based on
+`2.4.7-p10-develop`, which is **772 commits ahead** of the released line, producing an unreviewable diff;
+the rebased PR then failed hygiene review for including a test file. Both wrong turns are written down
+with their causes.
+
+> **The two numbers side by side:** **13 lines of production code**, and a **211-line retrospective**.
+> Which of the two is more valuable when this area breaks again in six months? The patch is reconstructible from the ticket. The three near-miss defects, the
+> toolchain conflict, and the two failed delivery attempts are not.
+
+### 7.5 Honest limits
+
+- The corpus is **7 tickets**, not a statistical base. It is a growing evidence set, not a dataset.
+- Retrospectives are **versioned and sometimes corrected after the fact** (5537 is at v1.1; 5180 carries
+  a v2.1 addendum for a QA-found regression). That is a feature — the record tracks reality — but it
+  means a reader must check the revision history rather than assume v1.0 is final.
+- Retrieval today is **semantic search over the folder**, not a curated knowledge base. Turning the
+  corpus into structured, queryable priors is still ahead of us, and is a natural fit for the Blackboard's
+  evidence sections (§8).
+
+**Thesis for the segment:**
+> The swarm's durable output is not the patch — it is the **patch plus a structured record of why it is
+> correct, what nearly went wrong, and what the method should learn.** Everything in the following
+> segments exists to make that record trustworthy and cheap enough to produce every time.
+
+---
+## 8. Segment 8 — Future: from Sequential Waterfall to a Stigmergic Blackboard **[planned]**
+
+### 8.1 The concept
 
 A **Blackboard** is a shared, persistent workspace state on disk — e.g. `var/bdad/<TICKET>/state.json` —
 with dedicated sections for the intake brief, the MIG blast-radius JSON, the failing test path, the
@@ -744,7 +1011,7 @@ shared state**:
 append; no patch is done while one is open. That is Consensus by Resonance expressed as a data
 structure — agreement is the *absence of an outstanding objection*, not a vote tallied by a hub.
 
-### 7.2 Why it is beneficial
+### 8.2 Why it is beneficial
 
 | Benefit | Mechanism |
 |---|---|
@@ -753,7 +1020,7 @@ structure — agreement is the *absence of an outstanding objection*, not a vote
 | **Evidence-based acceptance** | A patch advances because the shared state reaches equilibrium — code compiles, tests pass, no critic node can append a violation — not because a manager said so |
 | **Philosophical alignment** | Restores the Resonance and Stigmergy axioms the hub currently violates |
 
-### 7.3 Transition plan
+### 8.3 Transition plan
 
 1. Define the schema for `blackboard.json` / `blackboard.md`.
 2. Strip routing instructions out of `orchestrator.agent.md`; rewrite it as the filesystem/terminal
@@ -761,7 +1028,7 @@ structure — agreement is the *absence of an outstanding objection*, not a vote
 3. Update `patch-generator`, `test-author` and `dependency-tracer` to read inputs **exclusively from the
    Blackboard** via shell commands, not from conversational prompts.
 
-### 7.4 Open risks to raise in the room (do not skip these)
+### 8.4 Open risks
 
 The Blackboard replaces a sequencing problem with a **concurrency** problem. Three questions have no
 answer yet, and saying so is better than being asked:
@@ -779,8 +1046,7 @@ answer yet, and saying so is better than being asked:
 > termination and gate preservation first.
 
 ---
-
-## 8. Segment 7 — Future MIG phases **[planned]**
+## 9. Segment 9 — Future MIG phases **[planned]**
 
 | Phase | Scope | Value | Effort | Status |
 |---|---|---|---|---|
@@ -799,10 +1065,9 @@ calls as edges to *all* preferences and widen scope at low confidence.
 > note that Phase 3 is also what makes a Blackboard architecture safe to run less attended.
 
 ---
+## 10. Segment 10 — Walkthrough: a real ticket, ACP2E-5537
 
-## 9. Segment 8 — Dry run: ACP2E-5537
-
-### 9.1 The ticket
+### 10.1 The ticket
 
 | Field | Value |
 |---|---|
@@ -813,11 +1078,33 @@ calls as edges to *all* preferences and widen scope at low confidence.
 | **Why it's ours** | *"The backport tool was not able to successfully backport solution. Moving ticket for manual backport."* (2026-11-05) |
 | **Source** | Glean-indexed Jira snapshot, updated 2026-11-06. Treat as indexed, not live state. |
 
-**Why this is a good workshop ticket:** it is small enough to hold in one slide, it is a **real
+**Why this is a good worked example:** it is small enough to follow end to end, it is a **real
 configuration-mapping defect** (not a toy), its blast radius is genuinely non-obvious, and it is a
 *backport* — which lets us show how the swarm behaves when a fix already exists upstream.
 
-### 9.2 The defect
+> ### ⚠️ Read this before §10
+>
+> **This walkthrough was written while the ticket was open, against `2.4-develop` (this workspace).** The
+> ticket has since been **delivered on the `v2.4.7-p10` release line**, and the real record is
+> `docs/retrospectives/ACP2E-5537/retrospective.md` (v1.1) — see §7.4.
+>
+> The two differ in one important way, and **the difference is itself the best teaching material in the
+> deck**:
+>
+> | | This walkthrough (2.4-develop) | What actually shipped (2.4.7-p10) |
+> |---|---|---|
+> | Mapping lives in | `errorMessageCodesMapper` argument, `Quote/etc/di.xml:173-189` | `private const MESSAGE_CODES` |
+> | Fix shape | add DI config entries | extend a class constant |
+> | `create()` signature | `(string\|Phrase, int, ?float)` | `(string, int)` |
+> | Extra work found | — | 2 GraphQL enums extended; fresh test written (upstream test unrunnable) |
+>
+> **Both are correct for their branch.** The walkthrough below remains a faithful rendering of the method
+> on `2.4-develop`, where the `di.xml` sites it cites are real and verifiable. Read it as *how the swarm
+> reasons*, then read §7.4's record as *what it found when it actually ran — on a branch where the
+> mechanism did not even exist.* That contrast carries the backport lesson better than either artifact
+> alone: **verify the mechanism exists on the target branch, not just the file.**
+
+### 10.2 The defect
 
 Validation messages from `addProductsToCart` are mapped to error codes by *substring match on the
 message text*. Messages with no matching entry fall through to `UNDEFINED`. Clients that key on the code
@@ -835,7 +1122,7 @@ actionable message Commerce already produced.
 | **Expected** | `The requested qty exceeds the maximum qty allowed in shopping cart` with a specific code — triage proposed `INSUFFICIENT_STOCK` |
 | **Actual** | Same message, `"code": "UNDEFINED"` |
 
-### 9.3 STEP 1 — Scribe: intake brief ✋ **STOP 1**
+### 10.3 STEP 1 — Scribe: intake brief ✋ **STOP 1**
 
 The Scribe retrieves the ticket through Glean, then produces the structured brief — and, in BDAD framing,
 the **behavior contract**:
@@ -855,15 +1142,15 @@ Scenario: Max-qty validation returns an actionable error code
 | **Repro class** | API-functional (GraphQL) — **not** a concurrency ticket, so no MFTF-only constraint |
 | **Known ambiguity to surface, not invent** | The ticket lists **seven further unmapped messages** beyond the reported one. *Is the agreed scope the reported max-qty case only, or the full list?* |
 
-> **This is the single most important beat in the dry run.** The Scribe must **not** silently pick a
+> **This is the most important step in the walkthrough.** The Scribe must **not** silently pick a
 > scope. A naive single-prompt agent maps the one message in the title and reports success; the
 > stakeholder then reopens the ticket for the other seven. Stop 1 exists precisely to make the human
 > answer this before any test is written.
 
-**Workshop decision for the dry run:** scope = the reported max-qty message **plus** the other messages
+**Scope decision for the walkthrough:** scope = the reported max-qty message **plus** the other messages
 listed in the ticket notes, each with an explicit code decision.
 
-### 9.4 STEP 2 — Dependency Tracer: blast radius
+### 10.4 STEP 2 — Dependency Tracer: blast radius
 
 Here the grep-vs-MIG contrast becomes concrete. The mapping is **data in `di.xml`**, consumed through
 constructor injection — the relationship between the config entry and the class that reads it is exactly
@@ -897,7 +1184,7 @@ is why the reported case still returns `UNDEFINED`.
    `foreach ($this->errorMessageCodesMapper …)` means **first match wins** — so key specificity and
    ordering are part of the fix, not an afterthought.
 
-### 9.5 STEP 3 — Test Author: Red first ✋ **STOP 2**
+### 10.5 STEP 3 — Test Author: Red first ✋ **STOP 2**
 
 **Repro vehicle:** API-functional GraphQL test alongside
 `dev/tests/api-functional/testsuite/Magento/GraphQl/Quote/AddProductsToCartTest.php`, which already
@@ -912,10 +1199,10 @@ Assertions, invariant-first:
   from degenerating into "map everything to INSUFFICIENT_STOCK".
 
 **Red must fail for the right reason.** Demonstrate the actual assertion diff
-(`UNDEFINED` vs `INSUFFICIENT_STOCK`) — not a fixture or environment error. In the room, this is the
-moment to point back at §2.2: *this* is the check a single-agent loop quietly skips.
+(`UNDEFINED` vs `INSUFFICIENT_STOCK`) — not a fixture or environment error. This is the Unanchored Red
+check from §2.2: the verification a single-agent loop quietly skips.
 
-### 9.6 STEP 4 — Patch Generator: Green ✋ **STOP 3**
+### 10.6 STEP 4 — Patch Generator: Green ✋ **STOP 3**
 
 The expected change is **configuration, not logic** — add the missing keys to `errorMessageCodesMapper`
 in `app/code/Magento/Quote/etc/di.xml:175-187`, choosing keys specific enough not to over-capture, with
@@ -931,14 +1218,14 @@ Constraints the profile enforces: PSR-12, strict typing, DI, Cloud compatibility
 > `AddProductsToCartError` already carries untranslated-`Phrase` handling (`:31-33`, `:45`), so the
 > branches are **not** identical and a blind cherry-pick is exactly the wrong instinct.
 
-### 9.7 STEP 5 — Consensus Gateway: deterministic validation
+### 10.7 STEP 5 — Consensus Gateway: deterministic validation
 
 `php -l` · PHPCS · static suite · MFTF generation · **cross-domain gate** (Web APIs → MSI + B2B, per the
 domain adjacency map, because of the `PurchaseOrder` consumer) · **mock-surface sync** (does
 `AddProductsToCartErrorTest` still cover the mapper's shape?). Verdict is binary; NOT-GREEN returns the
 work via Loop-back B.
 
-### 9.8 STEP 6 — Scribe: egress ✋ **STOP 4**
+### 10.8 STEP 6 — Scribe: egress ✋ **STOP 4**
 
 Dev summary, release notes, Manual Steps for QE (Kateryna Muntianu) mirroring the reproduction, and the
 postmortem with flow trace. Two egress rules apply directly here:
@@ -949,9 +1236,9 @@ postmortem with flow trace. Two egress rules apply directly here:
   `developer.adobe.com/commerce/webapi/graphql/schema/cart/mutations/add-products#errors` be updated.
   That is a real deliverable and must not fall off the end of the pipeline.
 
-### 9.9 What the dry run demonstrates — the closing slide
+### 10.9 What the walkthrough demonstrates
 
-| Beat | What it proved |
+| Step | What it demonstrates |
 |---|---|
 | Stop 1 scope question | The swarm surfaces ambiguity instead of inventing acceptance criteria |
 | Two mappers, B2B consumer | MIG-style tracing finds consumers grep's text search does not connect |
@@ -959,3 +1246,17 @@ postmortem with flow trace. Two egress rules apply directly here:
 | Guard assertion at Red | Separated authorship prevents "make everything INSUFFICIENT_STOCK" |
 | Failed auto-backport | Re-derive against the real branch; automation failed because contexts differ |
 | Docs deliverable at Stop 4 | Egress is part of done, not an afterthought |
+
+---
+## 11. Objections and open questions
+
+| Objection | Honest answer |
+|---|---|
+| *"Six agents is just one model six times — where's the intelligence gain?"* | There is none, and we don't claim one. The A/B shows correctness was a **tie**. The gains are token economics (−56% cache reads), safety (no destructive incident), coverage, and auditability. |
+| *"Four human stop points — isn't that slower than just doing it myself?"* | API time was ~tied with mono. The gates are what make the output trustworthy; `R-STOPTUNE` exists to evaluate relaxing low-risk gates **once we have data**, not before. |
+| *"Why not let the agent just run the full test suite?"* | You can — it's the nightly recall safety net. MIG is about knowing the right set *before* pushing, and about the stale-mock class the full suite also catches only late. |
+| *"Is the Blackboard going to work?"* | Unproven. The <25k-token Orchestrator context is a projection, not a measurement, and ownership/termination/gate-preservation are open problems (§8.4). |
+| *"What happens when agents disagree?"* | Today the Consensus Gateway's deterministic verdict wins and work loops back. Disagreement about *requirements* is escalated to the human at a stop point — it is never resolved by vote. |
+| *"Can this run unattended?"* | Not today, by design. That's MIG Phase 3 plus `R-MCP`, and the decision on record is to stay native for the interactive loop. |
+
+---
