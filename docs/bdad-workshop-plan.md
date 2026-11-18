@@ -75,9 +75,9 @@ confident output, not errors:
 BDAD is the set of constraints that makes each of those structurally hard rather than merely
 discouraged.
 
-### 1.3 The four working parts
+### 1.3 The five working parts
 
-The toolkit rests on four mechanisms. The rest of this document is, in effect, an expansion of each.
+The toolkit rests on five mechanisms. The rest of this document is, in effect, an expansion of each.
 
 **1 · Behavior first — TDD and BDD, applied to agents (§2).**
 The described behavior is turned into an executable, *failing* test before any production code is
@@ -108,7 +108,63 @@ runs in its own context window, which is both a token mechanism and an integrity
 passes through **four mandatory human stop points**, so no run mutates state, commits, or publishes
 without explicit approval.
 
-### 1.4 How the pieces fit together
+**5 · A reproducible environment — `setup.sh` (§1.4).**
+None of the above means anything if "the test failed" can also mean "the instance was stale." A single
+script owned by the Orchestrator rebuilds or refreshes the Adobe Commerce instance, clears generated
+code and caches, and warms both test frameworks — so Red and Green are statements about the code, not
+about the box.
+
+### 1.4 The environment the agents act on — `setup.sh` **[shipped]**
+
+`setup.sh` is the swarm's environment control surface. It is part of the sidecar — cloaked via
+`.git/info/exclude`, never committed into product code — and the Orchestrator owns it outright
+(`.github/agents/orchestrator.agent.md`). Specialist agents do not hand-roll environment commands.
+
+```
+./setup.sh <BRANCH-NAME> [--ee] [--b2b] [--msi] [--fast]
+```
+
+**Two modes, and the distinction is the point:**
+
+| Mode | What it does | When |
+|---|---|---|
+| **Full** (default) | Wipes `app/etc/config.php` + `env.php`, runs `setup:install --cleanup-database`, reapplies developer/MFTF configuration, then primes *both* test frameworks from scratch | New branch, changed module set, or a suspected-dirty instance |
+| **`--fast`** | Skips every database wipe and the reinstall. Syncs branches, resolves Composer, relinks modules, waits for the DB, clears `var/cache`, `page_cache`, `view_preprocessed`, `pub/static`, `generated/code`, `generated/metadata`, flushes | The common case between iterations of a Red-Green loop |
+
+**What a full run actually guarantees**, in order:
+
+| Phase | Guarantee |
+|---|---|
+| **Pre-flight** | The branch exists in **all** requested repositories or **none** — a partially-synchronized CE/EE/B2B/MSI checkout is refused outright, not discovered three hours later as a confusing failure |
+| **Services** | Docker is up (starting Docker Desktop if needed), MariaDB answers on `127.0.0.1:3306`, OpenSearch answers on `:9200` — with explicit waits instead of race-prone assumptions |
+| **Git + Composer** | Branches synced from their correct bases (`2.4-develop` for CE/EE, `develop` for B2B/MSI), dependencies resolved, EE/B2B modules relinked through `build-ee.php` |
+| **Application** | Clean install against a cleaned database, then the configuration agentic testing needs: developer mode, rewrites on, form keys and 2FA off, WYSIWYG disabled, long admin sessions |
+| **Integration priming** | The sandbox is cleared, `magento_integration_tests` is dropped and recreated, and one throwaway suite is run with `TESTS_CLEANUP=enabled` purely to generate the template-DB dump — then the flag is flipped to `disabled`, so **every subsequent integration run restores from that dump instead of reinstalling** |
+| **MFTF priming** | Indexers forced to realtime and reindexed (no "product not visible" flakes), `mftf build:project`, credentials written *after* the build that would otherwise delete them, and a Selenium readiness report |
+
+**Why this is a toolkit component and not a convenience script.** Three of its behaviours map directly
+onto failure modes named in §1.2:
+
+1. **It eliminates most Unanchored Reds (§2.2).** A test that fails because the instance is stale, the
+   indexer is lagging, generated code is from another branch, or the MFTF project was never rebuilt is a
+   *false* Red — and a false Red is the most expensive thing that can happen to a Red-Green loop,
+   because it sends an agent off to fix nothing. A warm, known-state instance is what makes "Red for
+   the intended reason" a checkable claim rather than an assumption.
+2. **It is the answer to ad-hoc mutation.** The A/B in §3 recorded one destructive incident: the
+   single-prompt run issued an ad-hoc database mutation and broke its own instance. The Orchestrator's
+   standing rule is the direct descendant of that: *prefer `./setup.sh` for resets and self-cleaning
+   tests for data* — a reset is cheap and reversible, a hand-written `DELETE` is neither.
+3. **It makes the test loop affordable.** The template-DB priming is the difference between an
+   integration run that reinstalls Magento and one that restores a dump. That is what makes
+   test-first viable at agent speed rather than a discipline everyone abandons by the third iteration.
+
+The embedded workarounds are themselves gathered artifacts: the MFTF 6.0.1 / Symfony 7 `TypeError` on
+leftover generated group classes, and the Selenium 4 removal of `/wd/hub/sessions` that
+`SELENIUM_CLOSE_ALL_SESSIONS=true` still calls. Each was diagnosed once during a run and written into
+the script with its reasoning in a comment, so it is never diagnosed twice — the same principle as §7,
+applied to infrastructure instead of to code.
+
+### 1.5 How the pieces fit together
 
 ```
           DESCRIBED BEHAVIOR  (what someone does / what should happen)
@@ -130,9 +186,13 @@ without explicit approval.
                                     3 · retrospective + frozen diff
                                                     │
                                                     └──► input to the next run
+
+          ─────────────────────────────────────────────────────────────────
+           5 · setup.sh — the known-state instance every stage runs against
+          ─────────────────────────────────────────────────────────────────
 ```
 
-### 1.5 Where it lives, and what it is not
+### 1.6 Where it lives, and what it is not
 
 - **Sidecar, not a fork.** The whole swarm infrastructure lives in a standalone repository
   (`bdad-swarm-core`) and is projected into the working checkout via symlinks, with `.git/info/exclude`
@@ -731,7 +791,7 @@ coordination/prose on Sonnet, mechanical validation on Haiku **[shipped]**.
 
 | VI | Model | Owns | Stops when |
 |---|---|---|---|
-| **Orchestrator** | Sonnet | Router + workflow state; env/exec commands, `setup.sh`, Red-Green sequencing, stop-point gating, usage logging, verdict spot-check | A stop point is reached, or a prerequisite is missing |
+| **Orchestrator** | Sonnet | Router + workflow state; env/exec commands, `setup.sh` (§1.4), Red-Green sequencing, stop-point gating, usage logging, verdict spot-check | A stop point is reached, or a prerequisite is missing |
 | **Scribe** | Sonnet | Intake (structured brief, domain classification, concurrency flag) and egress (Manual Steps, dev summary, release notes, postmortem) | The brief has unresolved ambiguity — it surfaces, it does not invent acceptance criteria |
 | **Dependency Tracer** | Opus | Phase 0 blast radius (MIG), root-cause archaeology, mock-surface sync, symlink-aware resolution, domain-map owner | The impacted surface is established — it does not design the fix |
 | **Test Author** | Opus | Red-first tests, repro-vehicle selection, MFTF authoring + failure triage, invariant-first assertions | Red is demonstrated *for the intended reason* |
