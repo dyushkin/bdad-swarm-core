@@ -75,15 +75,26 @@ final class MftfIndex
     private function testFiles(): array
     {
         $patterns = [
-            $this->repoRoot . '/app/code/*/*/Test/Mftf/Test/*.xml',
-            $this->repoRoot . '/ext/*/*/*/Test/Mftf/Test/*.xml',
+            $this->repoRoot . '/app/code/*/*/Test/Mftf/Test',
+            $this->repoRoot . '/ext/*/*/*/Test/Mftf/Test',
         ];
         $files = [];
         foreach ($patterns as $pattern) {
-            foreach (glob($pattern) ?: [] as $file) {
-                $files[] = $file;
+            foreach (glob($pattern, GLOB_ONLYDIR) ?: [] as $directory) {
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator(
+                        $directory,
+                        \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::FOLLOW_SYMLINKS
+                    )
+                );
+                foreach ($iterator as $file) {
+                    if ($file->isFile() && $file->getExtension() === 'xml') {
+                        $files[] = $file->getPathname();
+                    }
+                }
             }
         }
+        sort($files);
         return $files;
     }
 

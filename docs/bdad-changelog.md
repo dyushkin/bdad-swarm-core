@@ -6,8 +6,8 @@ This is the authoritative document for "why is the swarm shaped the way it is" a
 
 | | |
 |---|---|
-| **Current version** | v2.10 |
-| **Last updated** | 2026-10-26 |
+| **Current version** | v2.25 |
+| **Last updated** | 2026-11-20 |
 | **Scope** | `.github/agents/` Swarm architecture (not a code ticket) — 6 sub-agent VIs + domain reference, with `.claude/CLAUDE.md` retained as a compatibility pointer |
 | **Status legend** | ✅ done · 🟡 partial · ⬜ not started · 🔎 resolved by investigation |
 
@@ -64,6 +64,18 @@ Historical narrative uses the current terminology; recorded outcomes and technic
 | v2.11 | 2026-09-08 | **Expanded the human-in-the-loop gates from 2 → 4 mandatory stop points** (see **PART XIII**): halt after (1) Scribe intake brief, (2) Red, (3) Green, (4) Consensus green + dev summary + release notes. Updated `orchestrator.md` (new **Mandatory Stop Points** subsection), the runbook template (`[PAUSE HERE]` markers on STEP 1/3/4/6 + a non-negotiables bullet), and a new `CLAUDE.md` non-negotiable. The old "after the gate" pause moves from *before* egress to *after* egress, bundled with the summaries. Rationale: tighter operator control during Swarm development. |
 | v2.12 | 2026-09-08 | **Corrected the config-reload model** (see **PART XIV**, supersedes PART IX row 3): per current Claude Code docs confirmed via the `claude-code-guide` agent, an edit to an *existing* `.claude/agents/*.md` (body + frontmatter) **hot-reloads within seconds, no restart**; `CLAUDE.md` reloads on `/clear`; a full restart is needed **only** for a NEW agent file when `.claude/agents/` did not exist at session start (or agents under `--add-dir`). `/agents`/`/memory`/`/config` are diagnostic-only. Relaxed runbook §0.2 accordingly; the v2.2 empirical "restart required" finding is retained as a conflicting observation pending live re-probe. Also updated memory `claude-code-subagent-mechanics`. |
 | v2.13 | 2026-09-08 | **Live re-probe RESOLVED the PART IX conflict** (see **PART XIV.5**): dispatched a newly-created and an edited-existing agent through the in-session Agent tool. Both loaded **without a restart** — but only after a **propagation delay** (~tens of seconds to ~1 min); dispatches fired immediately after the change hit the STALE definition (`not found` / old behavior). So the v2.2 "restart required" finding was a **latency false-negative**. Net rule: edit → wait for propagation (or `/clear`/restart to force immediacy); no restart needed for new-in-existing-dir or edited agents. |
+| v2.14 | 2026-11-19 | **Single-coordinator topology** (see **PART XVI.1**). The ACP2E-5597 Stage 1 dry run split coordination between the main session and a synchronous Orchestrator subagent. Returning specialist results to that subagent failed (`write_agent only supports background agents`). The Orchestrator now runs only as the main session (`copilot --agent orchestrator`). Its profile sets `disable-model-invocation: true`, uses `tools: ["*"]` (the old list had no `agent` alias), and adds an **Execution Model** section; specialists return output only to it. `copilot-instructions.md` gained **Coordination topology**, and "top-level conductor" became "main-session Orchestrator". |
+| v2.15 | 2026-11-19 | **Pinned models** (see **PART XVI.2**): Orchestrator `claude-opus-5.5`, Scribe `claude-sonnet-5.5`, Dependency Tracer `mai-code-2`. The commented model-tier lines became `model:` keys. Test Author, Patch Generator, and Consensus Gateway are unchanged. |
+| v2.16 | 2026-11-19 | **Run 2 dry-run follow-ups** (see **PART XVI.4**). Each change was confirmed individually. Changes: pre-intake Tracer budget (30 calls / 150 lines; formal Phase 0 uncapped); Tracer tools gained `search` and `scout/*` (memory writes forbidden), with the Orchestrator passing seeds only; mandatory Orchestrator `scout-ensure_fresh` (retry once, then label `freshness unverified`); exact labelled handoff citations (Orchestrator and Scribe); runbook §0/§1/§2/§4 rewritten for the main-session Orchestrator with a corrected dry-run harness (`shell(git:*)` with mutating subcommands denied, no python); usage taken from `--usage-output-file` stored outside the repository, with the retrospective's Usage section marked `pending session end`. |
+| v2.17 | 2026-11-19 | **Behavior contract (Given/When/Then)** (see **PART XVI.5**). Scribe's intake brief adds a `gherkin` contract: 1 `Defect:` scenario plus `Invariant:` scenarios, max 5; observable Then clauses; `# OPEN:` for unresolved points. The Orchestrator shows it verbatim at STOP 1 for approval, Test Author maps each scenario to a test method, and Scribe carries it into the retrospective. |
+| v2.18 | 2026-11-19 | **Test Author pin + verbatim relay.** `test-author.agent.md` pins `model: claude-sonnet-5.5`; in the ACP2E-5597 Stage 2 dry run it inherited `claude-opus-5.5` and used 118.8 of 294.9 credits (40%). The Orchestrator gains the rule *Relay specialist recommendations verbatim*. In the same run it added "a NEW dedicated test class is preferred" to the Tracer's placement advice (beside `Model/CustomerTest.php`), so Test Author created a new class. Disagreements now go to the next stop point instead of being settled in a brief. |
+| v2.19 | 2026-11-19 | **MIG: MFTF index searches subfolders.** `MftfIndex::testFiles()` only looked at files directly in `Test/Mftf/Test/*.xml`, so tests in subfolders were missing from `--mftf-module` and `--mftf-group` results. The ACP2E-5597 Stage 2 dry run exposed this: `Magento_CustomerSegment` reported 29 tests instead of 37, and 2 of the 5 newsletter tests (in `CustomerSegmentsWithoutRealTimeCheck/`) were found only by the Tracer's own search. The index now walks each `Test/Mftf/Test` directory recursively. New regression test `test/MftfIndexTest.php` (Red before the fix, Green after). The Consensus Gateway's dependent-suite list was affected too. `ResolverCorpusTest::testCorpusMockImpactRecall` was already failing on this branch and is unrelated. |
+| v2.20 | 2026-11-19 | **Patch Generator pin.** `patch-generator.agent.md` pins `model: claude-opus-5.5`. It writes production code, so the strongest tier is kept on purpose; before, it inherited whatever the session used. With this, every Swarm agent except Consensus Gateway has an explicit model. |
+| v2.21 | 2026-11-19 | **MIG: `--diff` and `--mock-impact` see nested repositories.** `GitDiff` only ran `git -C <CE root>`, so a change in `magento2ee` or `magento2b2b` (symlinked into `app/code`) showed up as `changed: []`. The Consensus Gateway would have read that as no blast radius: a false green. Found while preparing the ACP2E-5597 Stage 4 dry run, when `--diff HEAD` showed nothing despite the modified EE `Newsletter.php`. `GitDiff` now also diffs top-level nested repositories that contain `app/code` or `ext`, reports their files by the root-relative (symlinked) path, and reads base content from the owning repository. New regression test `test/GitDiffTest.php` (Red before, Green after). On the real tree, `--diff HEAD` now reports `Newsletter.php`. The `ResolverCorpusTest` failure was already there and is unrelated. |
+| v2.22 | 2026-11-19 | **Consensus Gateway pin.** `consensus-gateway.agent.md` pins `model: gpt-6.1-sol`, so the gate is reviewed by a different provider than the Claude agents that wrote the test and the fix. All six Swarm agents now have an explicit model. |
+| v2.23 | 2026-11-19 | **Consensus Gateway §B: the static suite must actually check the changed files.** `LiveCodeTest` reads a `changed_files*` list. When none exists, it falls back to `git diff` in the CE root. For an EE-only change (ACP2E-5597 `Newsletter.php`) that finds nothing, and the suite reports `OK (6 tests, 1 skipped)` without checking anything. With the list in place, the same suite fails on two Magento2 docblock warnings that were already in the touched file (`isSatisfiedBy()`, lines 187–188). CI would report them too. The profile now requires the Gateway to confirm that the list covers every changed repository, to quote which files were checked, and to treat a run with no list or an empty check as blocked or not run, never green. The Stage 4 kit writes `changed_files_local.txt` from the multi-repo diff before the run and removes it afterwards. |
+| v2.24 | 2026-11-19 | **Consensus Gateway: §B scope and human deferral.** Found in the ACP2E-5597 Stage 4 dry run (NOT-GREEN, 350.34 credits). (1) The v2.23 §B rule said "missing a changed PHP file from any repository", so the Gateway blocked on 17 untracked files unrelated to the ticket (MIG tool sources and an ACP2E-5537 retro file). §B coverage is now checked against the ticket's declared change set; other dirty files are listed as info and never block. (2) The Cross-Domain gate had no way to honour a human decision to run dependent-domain suites in CI rather than locally. New rule: a human stop-point decision may defer named suites, which are reported as `DEFERRED (human, <stop>)`. The verdict is then GREEN with deferrals, but only if every check that was run passed. A deferral never covers a failed suite, and the Gateway never defers on its own. |
+| v2.25 | 2026-11-20 | **Scribe: standard commit message.** At egress, Scribe now proposes a one-line commit message in the form `<TICKET>: <problem statement>`. The statement describes the defect and its impact, not the fix. The human approves it at stop point 4, and Scribe never commits. Reference: ACP2E-5597 commit `271b73b45b` (magento2ee). The ticket diff is saved as `docs/retrospectives/ACP2E-5597/ACP2E-5597.diff`. |
 
 > **How to read this doc:** this is the central architecture + change record for the BDAD swarm. It began as
 > the swarm-migration postmortem and now also carries every subsequent change to the approach (PART X onward).
@@ -114,16 +126,17 @@ achievable with that allowlist. The Geth "peers cross-examine" ideal is thus *co
 
 | VI | File | Model | Owns |
 |---|---|---|---|
-| Orchestrator | `.github/agents/orchestrator.agent.md` | Sonnet 5 | Hybrid Docker env, service connections, test-exec commands (`$PWD/`, `--filter`, no-Docker), `setup-swarm.sh`, operational commands, Red-Green-Refactor loop coordination, env gotchas |
+| Orchestrator | `.github/agents/orchestrator.agent.md` | `claude-opus-5.5` (v2.15) | Hybrid Docker env, service connections, test-exec commands (`$PWD/`, `--filter`, no-Docker), `setup.sh`, operational commands, Red-Green-Refactor loop coordination, env gotchas |
 | Test Author | `.github/agents/test-author.agent.md` | Opus 5 | Test authoring, MFTF execution + A/B/C failure triage, PHP-8 Attributes, invariant-first assertions, scenario-scoped placement/naming/docblocks |
-| Dependency Tracer | `.github/agents/dependency-tracer.agent.md` | Opus 5 | Phase 0 blast-radius, cross-domain gate, mock-surface sync, symlink resolution, **domain-reference owner**, MIG reserved seam |
+| Dependency Tracer | `.github/agents/dependency-tracer.agent.md` | `mai-code-2` (v2.15) | Phase 0 blast-radius, cross-domain gate, mock-surface sync, symlink resolution, **domain-reference owner**, MIG reserved seam |
 | Patch Generator | `.github/agents/patch-generator.agent.md` | Opus 5 | PSR-12/strict typing, DI, plugin constraints, service contracts, legacy-UI avoidance, Cloud-compat, file-level checks |
 | Consensus Gateway | `.github/agents/consensus-gateway.agent.md` | Haiku 4.5 | Mandatory Validation Workflow (`php -l`, PHPCS, static suite), cross-domain gate, green/merge verdict |
-| Scribe | `.github/agents/scribe.agent.md` | Sonnet 5 | Ticket intake → structured brief + domain classification, Manual Steps, dev summary, release notes, `docs/retrospectives/<TICKET>/retrospective.md` |
+| Scribe | `.github/agents/scribe.agent.md` | `claude-sonnet-5.5` (v2.15) | Ticket intake → structured brief + domain classification, Manual Steps, dev summary, release notes, `docs/retrospectives/<TICKET>/retrospective.md` |
 
 **Model-routing rationale:** deep-reasoning quants (Test Author, Dependency Tracer, Patch Generator) → Opus 5;
 router + prose writer (Orchestrator, Scribe) → Sonnet 5; deterministic command-tally gate → Haiku 4.5. The
-brief's 3.5-era model names were corrected to the current Opus 5 / Sonnet 5 / Haiku 4.5 lineup.
+brief's 3.5-era model names were corrected to the current Opus 5 / Sonnet 5 / Haiku 4.5 lineup. As of v2.15,
+the Orchestrator, Scribe, and Dependency Tracer models are pinned in frontmatter. The other three keep their tier comments. See PART XVI.2.
 
 ---
 
@@ -589,3 +602,104 @@ the tooling side.
 ## XV.4 Removal condition
 Delete the directive once `magento-semver` degrades gracefully on private-method signature changes (tracked as
 action item #7 in `docs/retrospectives/ACP2E-5245/retrospective.md`).
+
+---
+
+# PART XVI — Single-Coordinator Topology & Model Pins (v2.14–v2.15)
+
+**Date:** 2026-11-19 · **Source:** `docs/retrospectives/ACP2E-5597/swarmd-dryrun-stage1-report.md` (§7, §10)
+
+## XVI.1 Single-coordinator topology (v2.14)
+
+**Incident.** In the ACP2E-5597 Stage 1 dry run, the main session dispatched the Orchestrator as a
+synchronous one-shot subagent. It then dispatched Scribe and Dependency Tracer itself and tried to send their
+outputs back to that Orchestrator. The runtime rejected the follow-up because the agent was synchronous
+(`write_agent only supports background agents`). The Orchestrator therefore produced no synthesis.
+
+**Root causes (validated independently by a second model):**
+
+| # | Cause |
+|---|---|
+| 1 | The Orchestrator description said "Route work here first", which invited the model to invoke it as a subagent. |
+| 2 | `tools: [shell, read, write, edit]` had no `agent` alias, so the Orchestrator could not dispatch even as the session agent. Its Routing prose described a Claude-era `Agent(...)` allowlist that does not exist in Copilot. |
+| 3 | The shared policy named an undefined "top-level conductor" separate from the Orchestrator. |
+| 4 | No profile defined the specialist lifecycle: whether it runs synchronously or in the background, who receives its output, and whether follow-ups are allowed. |
+
+**Changes:**
+* `orchestrator.agent.md`:
+  * Description: the profile runs as the session agent and is never a subagent.
+  * Frontmatter: `disable-model-invocation: true` and `tools: ["*"]`. The `agent` alias, agent read/write, Glean/Scout
+    MCP, and user interaction are all required. A restrictive list silently drops unrecognized tokens.
+  * New **Execution Model (single coordinator)** section:
+    * If the Orchestrator cannot dispatch, it is running as a subagent and returns `BLOCKED`.
+    * It alone owns MCP evidence, dispatch, synthesis, workflow state, and stop points.
+    * Specialists are one-off and synchronous by default. Use background agents only when a follow-up is planned.
+    * Never send `write_agent` to a synchronous agent.
+    * Default Stage 1: Orchestrator → Scribe → Orchestrator → STOP 1. The pre-intake Tracer runs only under the
+      named-symbol exception.
+  * Usage log records the model ID, or `unknown` when the runtime does not expose it. Never estimate it.
+* `.github/copilot-instructions.md`: new **Coordination topology** section; "top-level conductor" → "main-session
+  Orchestrator".
+* `scribe.agent.md` and `dependency-tracer.agent.md`: "top-level conductor" → "main-session Orchestrator".
+* All five specialist profiles: added a contract. Each specialist returns its output to the Orchestrator and must not
+  dispatch other VIs, advance gates, or declare stop-point decisions.
+
+**Unchanged:** the four mandatory human stop points, the VI roles, and Red-Green-Refactor sequencing.
+
+## XVI.2 Model pins (v2.15)
+
+| VI | Previous (comment) | Pinned `model:` | Rationale |
+|---|---|---|---|
+| Orchestrator | `# model tier: sonnet` | `claude-opus-5.5` | It owns gates and synthesis across a long session. Errors propagate downstream, so this role needs the strongest reasoning. |
+| Scribe | `# model tier: sonnet` | `claude-sonnet-5.5` | Faithful evidence normalization and prose. A mid-tier model is enough. |
+| Dependency Tracer | `# model tier: opus` | `mai-code-2` | A code-focused model with a large context window (922K) for code and MIG output. A different provider from the Orchestrator makes the spot-check independent. |
+
+The IDs match the CLI subagent catalog exposed on 2026-11-19. Choices are judgment-based; no benchmark or
+cost data was available.
+
+## XVI.3 Verification pending
+* Rerun Stage 1 in a fresh `copilot --agent orchestrator` session. Confirm that:
+  * the Orchestrator can dispatch;
+  * specialist outputs return directly to it;
+  * no `write_agent` call targets a synchronous agent;
+  * the reported child model IDs match the pins.
+* Confirm whether `/subagents` per-agent overrides take precedence over frontmatter `model:`.
+* Confirm whether `disable-model-invocation` is honored by the CLI. GitHub documents it for the cloud agent. The prose
+  rule and `BLOCKED` preflight are the fallback.
+* Optional A/B: rerun with the alternates (GPT-6.2 Sol / GPT-6.1 Terra / Claude Sonnet 5.5) and compare usage, citation
+  quality, and agreement with the ACP2E-5597 triage.
+
+## XVI.4 Run 2 follow-ups (v2.16)
+
+Source: `docs/retrospectives/ACP2E-5597/swarmd-dryrun-stage1-report.md` §9 (native run 2: topology checks passed).
+Each item was confirmed individually by the user.
+
+| # | Finding | Decision | Files |
+|---|---|---|---|
+| 1 | The pre-intake Tracer used 93 tool calls with no budget | The pre-intake brief states a budget (default 30 tool calls / 150 output lines). At the limit, the Tracer returns `PARTIAL` with gaps. Formal MIG Phase 0 is uncapped. | `orchestrator.agent.md`, `dependency-tracer.agent.md` |
+| 2 | The Tracer had no Scout or `search`, so it fell back to native `UNINDEXED` search | `tools: [shell, read, edit, search, "scout/*"]`. `memory_write` and `memory_vote` are forbidden. The Orchestrator passes seeds only (symbols, exact anchors, freshness). | `dependency-tracer.agent.md`, `orchestrator.agent.md` |
+| 3 | `scout-ensure_fresh` was skipped | Mandatory before any Scout evidence enters a handoff. Record status, gaps, and `derived_views_verified`. On failure, retry once, then label the evidence `freshness unverified`. Re-run after `setup.sh` or a checkout. | `orchestrator.agent.md` |
+| 4 | A wrong handoff range was propagated to Scribe | The Orchestrator cites exact Scout ranges labelled by construct, never approximate lines. Scribe carries ranges through unchanged and marks unread ones "per Orchestrator handoff". | `orchestrator.agent.md`, `scribe.agent.md` |
+| 5 | Harness denials (`git -C … log` does not match `shell(git log)`); the runbook still described the subagent hand-off | Runbook §1 now uses a main-session Orchestrator. §2 is a non-interactive dry-run harness with `shell(git:*)` and mutating subcommands denied, `rg` and `date` allowed, and python not allowed. §0.2 and §4 were updated. | `docs/bdad-new-ticket-runbook.md` |
+| 6 | Per-dispatch usage is `unknown` in-session | Launch with `--usage-output-file ~/.copilot/usage/<TICKET>-<date>.json`. At egress, the retrospective's Usage section is marked `pending session end` and filled in from that file afterwards. | `orchestrator.agent.md`, `docs/bdad-new-ticket-runbook.md` |
+
+**Verification pending:** run 3 must show the Tracer calling Scout tools (to confirm that `scout/*` in the
+frontmatter is honored), staying within budget, an `ensure_fresh` record in the execution log, and no harness
+denials of read-only git.
+
+## XVI.5 Behavior contract (v2.17)
+
+Aligns the agent profiles with the workshop plan §10.3, where Scribe's intake output is the BDAD behavior
+contract. Design decisions confirmed by the user:
+
+| Decision | Choice |
+|---|---|
+| Relation to the brief | Added as a **Behavior contract** section. Scenario, Preconditions, Steps and Expected vs Actual stay, and Steps remain the manual repro. |
+| Scenario set | One `Defect:` scenario (fails before the fix) plus `Invariant:` scenarios (hold before and after); max 5 |
+| Then clauses | Observable and deterministic, in stakeholder language. No timings or class names; performance defects are stated structurally. Unresolved points are marked `# OPEN:`. |
+| Consumers | The Orchestrator presents it verbatim at STOP 1 for approval or amendment. Test Author implements one method per scenario, with the docblock derived from it, and reports per-scenario status in Red. Scribe carries the approved contract into the retrospective. |
+
+Files: `scribe.agent.md`, `orchestrator.agent.md`, `test-author.agent.md`, `docs/bdad-new-ticket-runbook.md`
+(STEP 1). Verification is pending: the next Stage 1 dry run must show the `gherkin` block in `1-scribe.md` and,
+verbatim, in `stop1.md`.
+

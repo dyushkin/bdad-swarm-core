@@ -95,7 +95,7 @@ Execute the static suite locally, stripping out the Allure extension to prevent 
 ## 6. Operational Commands (Host Execution)
 When you need to interact with the Magento application state:
 * Clear Cache: `bin/magento cache:clean`
-* **Environment Reset:** `./setup-swarm.sh {TICKET_NAME} [--ee] [--b2b] [--msi] [--fast]`
+* **Environment Reset:** `./setup.sh {TICKET_NAME} [--ee] [--b2b] [--msi] [--fast]`
     * *Use this to reset the local state. It completely resets Git branches, unlinks/relinks EE, B2B, and MSI modules, wipes the database, and reinstalls the application based on the provided flags. Use `--fast` to skip the DB reinstall for rapid iterations.*
 
 ## 7. Known "Gotchas" & Recurring Issues

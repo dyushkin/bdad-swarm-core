@@ -114,7 +114,7 @@ is sufficient for the DoD.
 - Location: `var/impact/edges.sqlite` (disposable; rebuilt on demand; never committed).
 - Key: per source file, `git hash-object <file>` (blob hash) → memoized edges from that file.
 - Invalidation: surgical — on read, if a file's current blob hash ≠ cached, re-extract just that file.
-- No whole-repo prebuild step; the cache warms as traces run. `setup-swarm.sh --index` may pre-warm after relink.
+- No whole-repo prebuild step; the cache warms as traces run. `setup.sh --index` may pre-warm after relink.
 
 ## 8. Output schema (Blast-Radius Report)
 
@@ -129,7 +129,7 @@ Reuse `impact-graph-proposal.md` §5 JSON verbatim (`seed`, `impacted_modules`, 
   "reserved" to "Phase 0 active" once shipped.
 - **Consensus Gateway** (`.github/agents/consensus-gateway.agent.md`): cross-domain gate consumes `run_plan` +
   `gate`; `mock_impact` becomes the mock-sync checklist.
-- **Orchestrator**: `setup-swarm.sh --index` pre-warm hook (optional).
+- **Orchestrator**: `setup.sh --index` pre-warm hook (optional).
 
 ## 10. Regression-replay corpus (DoD gate)
 
@@ -285,7 +285,7 @@ Wired the tool into the swarm profiles (`.claude/agents/`):
   green verdict; empty `observes` must not be read as "no impact" (Phase 0 recall caveat).
 * **`test-author.md`** — Mock Surface Synchronization references `--mock-impact` for mechanical enumeration.
 
-**Deferred:** Orchestrator `setup-swarm.sh --index` pre-warm hook — waits on **P0-6** (no `--index`/cache yet); the
+**Deferred:** Orchestrator `setup.sh --index` pre-warm hook — waits on **P0-6** (no `--index`/cache yet); the
 tool runs on demand meanwhile.
 
 ## 12f. Build log — P0-6 + P0-3 (2026-08-24)

@@ -185,7 +185,7 @@ Run against the ACP2E-5180 diff, this returns **both** the MSI acceptance test (
 
 - **CLAUDE.md (Rules A/B/D enforcement):** the agent MUST run `bin/impact-graph analyze --diff` and paste its output as the Blast-Radius Report; the `run_plan` *is* the mandatory test set, and `mock_impact` *is* the Rule-D checklist. `"acceptance_required": true` blocks a "done" claim until that tier is green or explicitly flagged unverified.
 - **Pre-push hook / CI:** `impact-graph plan --diff --emit=commands | sh` as a required status check; the full suite still runs nightly as a recall safety net.
-- **`setup-swarm.sh`:** `setup-swarm.sh --index` after module (re)linking; emit the linked-module manifest so the resolver knows which domains (EE/B2B/MSI) are in scope this session.
+- **`setup.sh`:** `setup.sh --index` after module (re)linking; emit the linked-module manifest so the resolver knows which domains (EE/B2B/MSI) are in scope this session.
 
 ## 7. Phased Rollout
 
@@ -215,7 +215,7 @@ MIG's own CI test: for every corpus entry, assert the resolver's `run_plan` **co
 |---|---|
 | **False negatives** (missing edge → silent gap) | Recall-first: `@api`/shared-model/`Table`-touching changes always include the acceptance tier; regression corpus guards recall. |
 | Dynamic DI / `ObjectManager::get()` unresolvable statically | Treat unresolved interface calls as edges to *all* preferences; flag `ObjectManager` direct usage as "low-confidence, widen scope." |
-| Graph staleness | Incremental index keyed by git blob hash; `setup-swarm.sh --index` after relink; CI rejects a stale graph. |
+| Graph staleness | Incremental index keyed by git blob hash; `setup.sh --index` after relink; CI rejects a stale graph. |
 | Symlink/EE/B2B path confusion | Resolve through `build-ee.php` map before module attribution. |
 | Coverage baseline drift (Phase 2) | Regenerate on a schedule; fall back to static edges if coverage missing. |
 

@@ -123,7 +123,7 @@ The empty-file guard has been unchanged since 2022; what changed is the **object
 - ✅ **Rule A (Blast-Radius)** proved useful *defensively* to exonerate our change and *offensively* to attribute the real regression.
 - 🟡 **§8C triage** — proposed extension (T5) to name the AllureHelper serialize masking as known framework noise; not yet written into CLAUDE.md.
 - ⬜ **Validator invariant guidance** (T3) — Rule C currently scoped to "money or quantity"; propose widening to "security/validation decisions."
-- ⬜ **Env-parity note** (T4) — add `upload_tmp_dir` pin to the infra/`setup-swarm.sh` runbook.
+- ⬜ **Env-parity note** (T4) — add `upload_tmp_dir` pin to the infra/`setup.sh` runbook.
 
 ---
 

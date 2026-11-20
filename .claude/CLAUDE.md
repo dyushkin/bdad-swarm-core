@@ -16,7 +16,7 @@ and Scout indexes the project and provides repository evidence. Consult it along
 
 | VI | Profile | Model | Owns |
 |---|---|---|---|
-| **Orchestrator** | `.github/agents/orchestrator.agent.md` | Sonnet 5 | Hybrid Docker env, service connections, test-execution commands, `setup-swarm.sh`, operational commands, Red-Green-Refactor loop coordination, environmental gotchas |
+| **Orchestrator** | `.github/agents/orchestrator.agent.md` | Sonnet 5 | Hybrid Docker env, service connections, test-execution commands, `setup.sh`, operational commands, Red-Green-Refactor loop coordination, environmental gotchas |
 | **Test Author** | `.github/agents/test-author.agent.md` | Opus 5 | Test authoring, MFTF execution + failure triage (visibility/assertion/application), PHP-8 Attributes, invariant-first assertions, scenario-scoped placement/naming/docblocks |
 | **Dependency Tracer** | `.github/agents/dependency-tracer.agent.md` | Opus 5 | Phase 0 blast-radius analysis (mechanized via the active MIG `impact-graph` tool), cross-domain verification gate, mock-surface synchronization, symlink-aware resolution |
 | **Patch Generator** | `.github/agents/patch-generator.agent.md` | Opus 5 | PSR-12/strict typing, DI, plugin constraints, service contracts, legacy-UI avoidance, full Cloud-compatibility, file-level checks |
@@ -38,7 +38,7 @@ and Scout indexes the project and provides repository evidence. Consult it along
   the Scribe's artifacts are the deliberate exception.)
 * **No autonomous ad-hoc mutation of shared DB/app state.** Manual `DELETE`/`UPDATE`/raw-SQL/`bin/magento`
   writes outside a fixture or `tearDown()` require explicit user approval first — never as an autonomous
-  debugging/cleanup shortcut. Use `./setup-swarm.sh` for resets and self-cleaning tests for data. (Details: Test
+  debugging/cleanup shortcut. Use `./setup.sh` for resets and self-cleaning tests for data. (Details: Test
   Author + Orchestrator.)
 * **MFTF-first for concurrency repros.** Multi-tab / multi-session / concurrent-request / stale-cross-request
   bugs go straight to MFTF (+ a unit test for the guard); do not spend integration variants a single PHP

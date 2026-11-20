@@ -13,7 +13,7 @@
 | Version | Date | Change |
 |---|---|---|
 | v1.0 | 2026-08-10 | Initial retrospective: journey, blind spots, proposed rules (A–D), infra proposals, MIG vision, action plan. |
-| v1.1 | 2026-08-11 | Added Remediation Ledger and inline status marks; recorded implemented items (Rules A–D, compose/`setup-swarm.sh` hardening) and three bonus environment bugs found during execution. |
+| v1.1 | 2026-08-11 | Added Remediation Ledger and inline status marks; recorded implemented items (Rules A–D, compose/`setup.sh` hardening) and three bonus environment bugs found during execution. |
 | v1.2 | 2026-08-18 | Post-merge CR + QA round: added the shipment-aware `shipping_canceled`/`total_canceled` fix (CR); analysed QA's "persistent Total Due on a fully-shipped cancelled order" finding (confirmed expected, not a regression); relocated tests to scenario-based `Test/Integration/Order/AdminCancellationTest` and refreshed §3/§4 test conventions. |
 | v2.0 | 2026-09-14 | **Superseding re-implementation.** The v1.x line (Options A/B: block cancellation of shipped orders, or rewrite header/total cancellation math) was **abandoned in QA/PO review** and replaced with a **display-only** fix scoped to `Magento\Sales\Block\Adminhtml\Items\Column\Qty`. §I–VII below are rewritten to reflect the final shipped design; the v1.x journey is retained in §VIII as historical record of the rejected options and why. |
 | v2.1 | 2026-09-15 | **QA regression correction on the v2.0 display-only fix.** Jenkins flagged a SemVer MINOR notice (accepted) and a real MSI MFTF regression (fixed) in the v2.0 formula on a partially-shipped, fully-uninvoiced order. See §IX. |

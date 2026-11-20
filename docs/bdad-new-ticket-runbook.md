@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Purpose** | How to run a live L4 ticket through the BDAD swarm + MIG Phase 0 tooling |
-| **Last updated** | 2026-10-26 |
+| **Last updated** | 2026-11-19 |
 | **Companions** | `docs/bdad-changelog.md` (architecture), `docs/mig/mig-phase0-spec.md` (tool), `.github/agents/*.agent.md` (VIs), `.github/agents/reference/domains.md` (domains) |
 
 ---
@@ -15,13 +15,17 @@
    in the repo root. Use the six `.github/agents/*.agent.md` profiles and the shared
    `.github/agents/reference/domains.md`; do not recreate a second set of Claude agent profiles.
    The Claude Code reload probes in changelog **PART XIV** are historical and do not establish Copilot's
-   reload behavior.
+   reload behavior. Start that session **as the Orchestrator**, writing per-agent usage outside the repo:
+   `copilot --agent orchestrator --usage-output-file ~/.copilot/usage/<TICKET>-<YYYYMMDD>.json`
+   (or `/agent orchestrator` in an existing session, which gives no usage file). It is the sole coordinator and
+   must never be dispatched as a subagent (changelog v2.14, PART XVI).
 3. Drop the ticket description into a file (e.g. `ticket.md`) or paste it inline.
 
-## 1. Copy-paste template (top-level-conducted — recommended)
+## 1. Copy-paste template (Orchestrator session — recommended)
 
-Top-level conducting keeps the four human pause points (after intake, after Red, after Green, after the
-gate + summaries) under your control.
+Paste this into a session started with `copilot --agent orchestrator`. The Orchestrator dispatches the five
+specialists, receives their outputs directly, and halts at the four human pause points: after intake, after
+Red, after Green, and after the gate plus summaries.
 
 ```
 We are starting ticket <TICKET-ID> (branch <branch>). Ticket description: <path or inline>.
@@ -30,8 +34,9 @@ Do not commit anything. Pause and show me the result after STEP 1 (intake brief)
 (Green), and STEP 6 (gate verdict + dev summary + release notes).
 
 STEP 1 — scribe: normalize the ticket into Scenario / Preconditions / Steps / Expected+Actual + Manual Steps
-  to Reproduce, and classify it into its Adobe Commerce domain(s) using
-  .github/agents/reference/domains.md (name the primary domain + any it spans).  [PAUSE HERE — confirm the brief]
+  to Reproduce + a Given/When/Then behavior contract (1 Defect + Invariant scenarios, max 5), and classify it into its Adobe Commerce domain(s) using
+  .github/agents/reference/domains.md (name the primary domain + any it spans).
+  [PAUSE HERE — confirm the brief and approve/amend the behavior contract]
 
 STEP 2 — dependency-tracer: produce the Phase 0 Blast-Radius Report for the symbols the fix will touch,
   BEFORE any code. Use the MIG tool for the grep-invisible edges:
@@ -66,22 +71,47 @@ STEP 5 — consensus-gateway: run the Mandatory Validation Workflow (php -l, php
   test-author until green (a blocking loop-back, not a stop point). On green, proceed to STEP 6.
 
 STEP 6 — scribe: write the brief dev summary, release notes, and docs/retrospectives/<TICKET-ID>/retrospective.md (carrying the
-  Manual Steps to Reproduce).  [PAUSE HERE — Consensus green + dev summary + release notes ready for review]
+  Manual Steps to Reproduce, plus a Usage section marked "pending session end" that names the usage JSON path).
+  [PAUSE HERE — Consensus green + dev summary + release notes ready for review]
 ```
 
-## 2. Alternative — hands-off (delegate the whole flow to the Orchestrator)
+## 2. Unattended / dry-run harness (non-interactive Orchestrator session)
 
-For an unsupervised run, hand the entire ticket to the router (it may delegate to the five VIs via its
-`tools: Agent(...)` allowlist):
+For Stage 1, prefer the packaged kit: `docs/bdad-workshop/stage1-dryrun/run-stage1.sh <TICKET>`. It renders
+the prompt, runs this harness, shows a readable live console (`swarm_console.py`) and prints the post-run checks.
+`--replay <dir>` replays a recorded run without spending credits.
 
+Use this to observe a stage (for example, intake through STOP 1) without an interactive session. Anything not
+allowed is denied, because `-p` runs cannot prompt. Set `A` to an artifact directory outside the repository and
+put the prompt in `$A/prompt.txt`. The prompt must state the dry-run constraints and the stop point.
+
+```bash
+A=/path/to/artifacts; mkdir -p "$A/logs"
+copilot -p "$(cat "$A/prompt.txt")" --agent orchestrator --no-ask-user --trust-folder --add-dir "$A" \
+  --allow-tool='read' --allow-tool="write($A/**)" \
+  --allow-tool='glean(search)' --allow-tool='glean(read_document)' --allow-tool='glean(chat)' \
+  --allow-tool='scout' --deny-tool='scout(memory_write)' --deny-tool='scout(memory_vote)' \
+  --allow-tool='shell(git:*)' \
+  --deny-tool='shell(git push)' --deny-tool='shell(git commit)' --deny-tool='shell(git checkout)' \
+  --deny-tool='shell(git switch)' --deny-tool='shell(git reset)' --deny-tool='shell(git restore)' \
+  --deny-tool='shell(git stash)' --deny-tool='shell(git add)' --deny-tool='shell(git rebase)' \
+  --deny-tool='shell(git merge)' --deny-tool='shell(git cherry-pick)' --deny-tool='shell(git clean)' \
+  --deny-tool='shell(git tag)' --deny-tool='shell(git branch)' \
+  --allow-tool='shell(ls)' --allow-tool='shell(cat)' --allow-tool='shell(grep)' --allow-tool='shell(rg)' \
+  --allow-tool='shell(head)' --allow-tool='shell(sed)' --allow-tool='shell(wc)' --allow-tool='shell(date)' \
+  --deny-tool='shell(php)' --deny-tool='shell(bin/magento)' --deny-tool='shell(mysql)' \
+  --deny-tool='shell(docker)' --deny-tool='shell(rm)' \
+  --usage-output-file "$A/usage.json" --share "$A/transcript.md" --log-dir "$A/logs" \
+  --output-format json > "$A/stream.jsonl"
 ```
-Delegate this ticket to the `orchestrator` VI to run the full BDAD flow end-to-end: <ticket path/inline>.
-It should route scribe → dependency-tracer → test-author → patch-generator → consensus-gateway → scribe,
-pausing at all four mandatory stop points (intake brief, Red, Green, gate + summaries). Do not commit.
-```
 
-Note: the Orchestrator has no native Grep/Glob (allowlist limitation — see postmortem PART IX); it searches via
-Bash and delegates deep analysis to the dependency-tracer.
+* `shell(git:*)` with mutating subcommands denied is required. A narrow rule such as `shell(git log)` does not
+  match `git -C magento2ee log`, because the CLI parses `-C` as the subcommand. That blocked the Tracer's
+  history check in the ACP2E-5597 run 2.
+* `python`/`python3` are deliberately not allowed: arbitrary code would bypass the other denials.
+* Per-agent model IDs and usage come from `usage.json` (`agentMetrics`). `task` results do not expose them.
+* Never ask the default session to "delegate to the `orchestrator` VI". A subagent Orchestrator cannot receive
+  specialist results, and the profile sets `disable-model-invocation: true`.
 
 ## 3. Non-negotiables (always in force)
 
@@ -102,6 +132,7 @@ Bash and delegates deep analysis to the dependency-tracer.
 * **STEP 1 adds domain classification** (`domains.md`) as the routing signal.
 * **STEP 5 adds `--diff` / `--mock-impact` / `--mftf-group|--mftf-module`** to make the cross-domain gate +
   mock-sync mechanical and deterministic.
-* **Delegation is real** — §2 hands-off mode exists because recursive delegation is verified working.
+* **Delegation is real**: the Orchestrator runs as the main session and dispatches the specialists directly.
+  Since v2.14 it is never a subagent; §2 is a non-interactive Orchestrator session, not a hand-off.
 * **Explicit Phase-0-vs-CALLS caveat** — pre-code Phase 0 uses targeted queries; one-hop-away edges still need
   domain adjacency + grep until Phase 1 CALLS lands.

@@ -24,7 +24,7 @@ of the LLM into the MIG `impact-graph` tool.
 
 | VI | Model | Owns |
 |---|---|---|
-| **Orchestrator** | Sonnet | Router + workflow state; env/exec commands, `setup-swarm.sh`, Red-Green-Refactor sequencing, stop-point gating, usage logging, verdict spot-check |
+| **Orchestrator** | Sonnet | Router + workflow state; env/exec commands, `setup.sh`, Red-Green-Refactor sequencing, stop-point gating, usage logging, verdict spot-check |
 | **Scribe** | Sonnet | Intake (structured brief + domain + concurrency flag) and egress (Manual Steps, dev summary, release notes, postmortem) |
 | **Dependency Tracer** | Opus | Phase 0 blast-radius (MIG), root-cause archaeology, mock-surface sync, symlink-aware resolution, domain map owner |
 | **Test Author** | Opus | Red-first tests, repro-vehicle selection, MFTF authoring + failure triage, invariant-first assertions |

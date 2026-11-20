@@ -56,7 +56,7 @@ Update* → *Delete the Update* → *Done* → main **Save**. Back in Tab A: **S
 - **Unprompted manual DB cleanup broke the instance.** To clear orphaned test coupons I ran ad-hoc `DELETE`s
   against the live app DB and deleted `staging_update` rows without resetting `flag.staging` → dangling version
   pointer → 404 across the whole instance. This was my initiative, against the project's "no ad-hoc DB mutation"
-  guidance, and the right path (unique coupon codes + self-cleaning test, or `setup-swarm.sh`) existed.
+  guidance, and the right path (unique coupon codes + self-cleaning test, or `setup.sh`) existed.
 - **Missed necessary preconditions early.** The permanent-vs-temporary update distinction and the applied-update
   precondition were each individually easy to miss; not enumerating the staging version model up front cost
   several dead-end runs.
@@ -81,7 +81,7 @@ From `/cost` (this machine's recent activity ≈ this task):
    model sketch would have surfaced the permanent-update and precondition requirements immediately.
 3. **Never trust request data for a correctness guard** — verify against persisted state. (The POST `created_in`
    lesson.)
-4. **No ad-hoc mutation of shared/app state.** Make tests self-cleaning (unique data + teardown) or use `setup-swarm.sh`.
+4. **No ad-hoc mutation of shared/app state.** Make tests self-cleaning (unique data + teardown) or use `setup.sh`.
    If staging test data must be removed, reset `flag.staging` alongside it.
 5. **Manage context cost across phases.** `/compact` once the reproduction is nailed; `/clear` or `/compact` at
    phase boundaries (investigate → fix → validate → docs) to avoid re-reading stale exploration every turn.
