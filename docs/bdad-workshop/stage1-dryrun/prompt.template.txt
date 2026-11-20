@@ -1,0 +1,22 @@
+Ticket {{TICKET}}. Run the BDAD Swarm for this ticket through STOP 1 (after intake) only. This is a DRY RUN.
+
+Dry-run constraints:
+- Do not edit any repository file. Do not update Jira or create Glean comments.
+- Do not mutate the database, caches, indexers, or services. Do not run php, bin/magento, mysql, or docker.
+- Do not run the MIG impact-graph tool (it writes var/impact caches).
+- Write artifacts only under: {{A}}
+- Write artifacts with the file-creation tool, not shell redirection; shell writes are denied in this harness.
+- For the current branch use `git rev-parse --abbrev-ref HEAD`; `git branch` is denied in this harness.
+
+Observability requirements for this dry run:
+1. Record the result of your Execution Model preflight first.
+2. Save each specialist's returned output verbatim as soon as it returns: Scribe to {{A}}/1-scribe.md, Dependency Tracer to {{A}}/2-dependency-tracer.md. Do not paraphrase it.
+3. Save your own STOP 1 presentation verbatim to {{A}}/stop1.md.
+4. Write {{A}}/execution-log.md, an ordered log of every step:
+   - each MCP call, with tool and purpose;
+   - each dispatch: agent, sync/background, parallel or not, requested model, runtime-reported model ID or "unknown", and the usage block or "unknown";
+   - the order in which outputs were received and who received them.
+   Do not estimate unknown values.
+
+Local evidence: if docs/retrospectives/{{TICKET}}/retrospective.md exists, it is the living local triage record (a historical record; you may use it).
+Apply your routing rules, including the named-symbol parallel-dispatch exception if it applies. End at STOP 1.

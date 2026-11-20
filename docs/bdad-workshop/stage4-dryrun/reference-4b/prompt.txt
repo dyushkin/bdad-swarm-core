@@ -1,0 +1,52 @@
+Ticket ACP2E-5597. STOP 4 has been passed with a NOT-GREEN verdict, and the human decided how to resolve it. The decisions
+are in /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/stop4-decisions.md. The previous Stage 4 run is in /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage4-dryrun/reference (stop4.md, 3-consensus-gateway.md,
+5-consensus-gateway.md, verification.md, newsletter.diff, NewsletterTest-after.php.txt). Stage 3 artifacts are in /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage3-dryrun/reference
+and Stage 2 artifacts are in /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage2-dryrun/reference. The approved 5-scenario contract is in /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage4-dryrun/reference/stop3-decisions.md.
+Run the BDAD Swarm Stage 4b only: re-run STEP 5 (Consensus Gateway) under the STOP 4 decisions, then STEP 6 (Scribe
+egress) on green. End at STOP 4. This is a DRY RUN on the real working tree.
+
+Dry-run constraints:
+- Allowed repository writes, only by the named owner and only on a Gateway loop-back:
+  - Test Author: magento2ee/dev/tests/integration/testsuite/Magento/CustomerSegment/Model/Segment/Condition/Customer/NewsletterTest.php
+  - Patch Generator: magento2ee/app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php
+  Both are also reachable through the CE symlinks. Do not commit or stage. No other repository writes.
+- Allowed php commands: `php -l <file>`, `vendor/bin/phpcs --standard=Magento2 <file>`,
+  `vendor/bin/phpunit -c dev/tests/integration/phpunit.xml "$PWD/<test>" [--filter <method>]`,
+  `vendor/bin/phpunit -c dev/tests/static/phpunit.php.xml`, and
+  `php dev/tools/impact-graph/bin/impact-graph analyze ...`. No other php, bin/magento, mysql, docker or rm.
+- The static-suite config dev/tests/static/phpunit.php.xml (Allure stripped) and the changed-file list
+  dev/tests/static/testsuite/Magento/Test/_files/changed_files_local.txt were prepared by the harness. Do not edit them.
+- The change is uncommitted, so use `HEAD` as the MIG diff ref.
+- Do not update Jira or create Glean comments. Do not write docs/retrospectives/.
+- Write artifacts only under /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546, with the file-creation tool (shell redirection writes are denied).
+- For the current branch use `git rev-parse --abbrev-ref HEAD`; `git branch` is denied in this harness.
+
+Flow:
+1. Record your Execution Model preflight. Load stop4-decisions.md and the Stage 4 artifacts. Run scout-ensure_fresh.
+   Confirm the working tree matches the approved state: `git -C magento2ee diff` on Newsletter.php equals
+   /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage4-dryrun/reference/newsletter.diff, and NewsletterTest.php equals /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage4-dryrun/reference/NewsletterTest-after.php.txt.
+2. Dispatch consensus-gateway (sync). Give it: the declared change set (the two files) verbatim from stop4-decisions.md,
+   STOP 4 decisions 1 and 2 verbatim (the human deferral and the §B scope), the Phase 0 report from
+   /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage2-dryrun/reference/1-dependency-tracer.md, the MIG commands with ref HEAD, and the bulk-path tests. It runs its Completion Gate
+   (§A on both files, §B static suite, MIG --diff/--mock-impact, the bulk-path tests and NewsletterTest; §C recorded as
+   not applicable) and returns GREEN, GREEN with deferrals, or NOT-GREEN, with the failing output.
+3. If the verdict is NOT-GREEN, this is a blocking loop-back, not a stop point: send the failing output verbatim to the
+   owner (Patch Generator for Newsletter.php, Test Author for NewsletterTest.php), then re-dispatch consensus-gateway.
+   At most 2 loop-backs; if still NOT-GREEN, go to STOP 4 with the NOT-GREEN verdict and skip step 4.
+4. On GREEN or GREEN with deferrals, dispatch scribe (sync) for STEP 6 egress, written only under /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/egress/:
+   dev-summary.md, release-notes.md (include the behavior change for unknown customer ids from Stage 3), and
+   retrospective.md (Manual Steps to Reproduce, the deferred suites listed as "not run locally", plus a Usage section
+   marked "pending session end" that names /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/usage.json). Give Scribe the contract, the final diffs, the Gateway
+   verdict and the STOP 1–4 decisions.
+5. Present STOP 4 and halt.
+
+Observability requirements:
+1. Save each specialist's returned output verbatim as soon as it returns, numbered in dispatch order:
+   /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/<n>-<agent>.md (for example 1-consensus-gateway.md, 2-scribe.md). Do not paraphrase.
+2. Save your own verification (commands, relevant output, the diff check) to /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/verification.md.
+3. Save your STOP 4 presentation verbatim to /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/stop4.md. Include: the Gateway verdict with every check and its
+   result, the deferrals, any loop-back (why, owner, outcome), the egress files, the files changed in the repository,
+   what was not run, and the decisions requested at STOP 4.
+4. Write /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/execution-log.md: an ordered log of every MCP call and shell command (tool and purpose), each dispatch
+   (agent, sync/background, requested model, runtime-reported model or "unknown", usage or "unknown"), and the order
+   in which outputs were received and by whom. Do not estimate unknown values.

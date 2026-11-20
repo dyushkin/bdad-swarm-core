@@ -1,0 +1,354 @@
+{
+  "totalPremiumRequestCost": 15,
+  "totalUserRequests": 1,
+  "totalNanoAiu": 179276010000,
+  "aiCreditsStatus": "complete",
+  "tokenDetails": {
+    "input": {
+      "tokenCount": 70
+    },
+    "cache_read": {
+      "tokenCount": 1169835
+    },
+    "cache_write": {
+      "tokenCount": 198853
+    },
+    "output": {
+      "tokenCount": 38913
+    }
+  },
+  "totalApiDurationMs": 322218,
+  "sessionStartTime": "2026-11-20T04:15:49.170Z",
+  "codeChanges": {
+    "linesAdded": 479,
+    "linesRemoved": 0,
+    "filesModifiedCount": 8,
+    "filesModified": [
+      "/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/1-consensus-gateway.md",
+      "/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/egress/dev-summary.md",
+      "/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/egress/release-notes.md",
+      "/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/egress/retrospective.md",
+      "/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/2-scribe.md",
+      "/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/verification.md",
+      "/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/execution-log.md",
+      "/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4b-20261119-221546/stop4.md"
+    ]
+  },
+  "modelMetrics": {
+    "claude-opus-5.5": {
+      "requests": {
+        "count": 15,
+        "cost": 15
+      },
+      "usage": {
+        "inputTokens": 1178409,
+        "outputTokens": 28237,
+        "cacheReadTokens": 1016251,
+        "cacheWriteTokens": 162126,
+        "reasoningTokens": 891
+      },
+      "cacheExpiresAt": "2026-11-20T04:38:51.493Z",
+      "totalNanoAiu": 157874820000,
+      "aiCreditsStatus": "complete",
+      "tokenDetails": {
+        "input": {
+          "tokenCount": 32
+        },
+        "cache_read": {
+          "tokenCount": 1016251
+        },
+        "cache_write": {
+          "tokenCount": 162126
+        },
+        "output": {
+          "tokenCount": 28237
+        }
+      }
+    },
+    "gpt-6.1-sol": {
+      "requests": {
+        "count": 10,
+        "cost": 0
+      },
+      "usage": {
+        "inputTokens": 138500,
+        "outputTokens": 4463,
+        "cacheReadTokens": 122755,
+        "cacheWriteTokens": 15715,
+        "reasoningTokens": 649
+      },
+      "totalNanoAiu": 9625300000,
+      "aiCreditsStatus": "complete",
+      "tokenDetails": {
+        "input": {
+          "tokenCount": 30
+        },
+        "cache_read": {
+          "tokenCount": 122755
+        },
+        "cache_write": {
+          "tokenCount": 15715
+        },
+        "output": {
+          "tokenCount": 4463
+        }
+      }
+    },
+    "claude-sonnet-5.5": {
+      "requests": {
+        "count": 3,
+        "cost": 0
+      },
+      "usage": {
+        "inputTokens": 51849,
+        "outputTokens": 6213,
+        "cacheReadTokens": 30829,
+        "cacheWriteTokens": 21012,
+        "reasoningTokens": 0
+      },
+      "totalNanoAiu": 11775890000,
+      "aiCreditsStatus": "complete",
+      "tokenDetails": {
+        "input": {
+          "tokenCount": 8
+        },
+        "cache_read": {
+          "tokenCount": 30829
+        },
+        "cache_write": {
+          "tokenCount": 21012
+        },
+        "output": {
+          "tokenCount": 6213
+        }
+      }
+    }
+  },
+  "agentMetrics": {
+    "main": {
+      "totalApiDurationMs": 211270,
+      "totalNanoAiu": 157874820000,
+      "modelMetrics": {
+        "claude-opus-5.5": {
+          "requests": {
+            "count": 15,
+            "cost": 15
+          },
+          "usage": {
+            "inputTokens": 1178409,
+            "outputTokens": 28237,
+            "cacheReadTokens": 1016251,
+            "cacheWriteTokens": 162126,
+            "reasoningTokens": 891
+          },
+          "totalNanoAiu": 157874820000,
+          "tokenDetails": {
+            "input": {
+              "tokenCount": 32
+            },
+            "cache_read": {
+              "tokenCount": 1016251
+            },
+            "cache_write": {
+              "tokenCount": 162126
+            },
+            "output": {
+              "tokenCount": 28237
+            }
+          }
+        }
+      }
+    },
+    "b0241e2a-4fab-473b-a829-705ce1c56f27": {
+      "agentName": "consensus-gateway",
+      "agentDisplayName": "consensus-gateway",
+      "totalApiDurationMs": 74775,
+      "totalNanoAiu": 9625300000,
+      "modelMetrics": {
+        "gpt-6.1-sol": {
+          "requests": {
+            "count": 10,
+            "cost": 0
+          },
+          "usage": {
+            "inputTokens": 138500,
+            "outputTokens": 4463,
+            "cacheReadTokens": 122755,
+            "cacheWriteTokens": 15715,
+            "reasoningTokens": 649
+          },
+          "totalNanoAiu": 9625300000,
+          "tokenDetails": {
+            "input": {
+              "tokenCount": 30
+            },
+            "cache_read": {
+              "tokenCount": 122755
+            },
+            "cache_write": {
+              "tokenCount": 15715
+            },
+            "output": {
+              "tokenCount": 4463
+            }
+          }
+        }
+      }
+    },
+    "ed1794ee-491f-4263-9416-2dc872b8c41b": {
+      "agentName": "scribe",
+      "agentDisplayName": "scribe",
+      "totalApiDurationMs": 36173,
+      "totalNanoAiu": 11775890000,
+      "modelMetrics": {
+        "claude-sonnet-5.5": {
+          "requests": {
+            "count": 3,
+            "cost": 0
+          },
+          "usage": {
+            "inputTokens": 51849,
+            "outputTokens": 6213,
+            "cacheReadTokens": 30829,
+            "cacheWriteTokens": 21012,
+            "reasoningTokens": 0
+          },
+          "totalNanoAiu": 11775890000,
+          "tokenDetails": {
+            "input": {
+              "tokenCount": 8
+            },
+            "cache_read": {
+              "tokenCount": 30829
+            },
+            "cache_write": {
+              "tokenCount": 21012
+            },
+            "output": {
+              "tokenCount": 6213
+            }
+          }
+        }
+      }
+    }
+  },
+  "providerModelMetrics": [
+    {
+      "provider": {
+        "id": "copilot",
+        "label": "GitHub Copilot",
+        "kind": "copilot"
+      },
+      "modelId": "claude-opus-5.5",
+      "metrics": {
+        "requests": {
+          "count": 15,
+          "cost": 15
+        },
+        "usage": {
+          "inputTokens": 1178409,
+          "outputTokens": 28237,
+          "cacheReadTokens": 1016251,
+          "cacheWriteTokens": 162126,
+          "reasoningTokens": 891
+        },
+        "totalNanoAiu": 157874820000,
+        "aiCreditsStatus": "complete",
+        "tokenDetails": {
+          "input": {
+            "tokenCount": 32
+          },
+          "cache_read": {
+            "tokenCount": 1016251
+          },
+          "cache_write": {
+            "tokenCount": 162126
+          },
+          "output": {
+            "tokenCount": 28237
+          }
+        }
+      },
+      "modelDisplayName": "Claude Opus 5.5"
+    },
+    {
+      "provider": {
+        "id": "copilot",
+        "label": "GitHub Copilot",
+        "kind": "copilot"
+      },
+      "modelId": "gpt-6.1-sol",
+      "metrics": {
+        "requests": {
+          "count": 10,
+          "cost": 0
+        },
+        "usage": {
+          "inputTokens": 138500,
+          "outputTokens": 4463,
+          "cacheReadTokens": 122755,
+          "cacheWriteTokens": 15715,
+          "reasoningTokens": 649
+        },
+        "totalNanoAiu": 9625300000,
+        "aiCreditsStatus": "complete",
+        "tokenDetails": {
+          "input": {
+            "tokenCount": 30
+          },
+          "cache_read": {
+            "tokenCount": 122755
+          },
+          "cache_write": {
+            "tokenCount": 15715
+          },
+          "output": {
+            "tokenCount": 4463
+          }
+        }
+      },
+      "modelDisplayName": "GPT-6.1 Sol"
+    },
+    {
+      "provider": {
+        "id": "copilot",
+        "label": "GitHub Copilot",
+        "kind": "copilot"
+      },
+      "modelId": "claude-sonnet-5.5",
+      "metrics": {
+        "requests": {
+          "count": 3,
+          "cost": 0
+        },
+        "usage": {
+          "inputTokens": 51849,
+          "outputTokens": 6213,
+          "cacheReadTokens": 30829,
+          "cacheWriteTokens": 21012,
+          "reasoningTokens": 0
+        },
+        "totalNanoAiu": 11775890000,
+        "aiCreditsStatus": "complete",
+        "tokenDetails": {
+          "input": {
+            "tokenCount": 8
+          },
+          "cache_read": {
+            "tokenCount": 30829
+          },
+          "cache_write": {
+            "tokenCount": 21012
+          },
+          "output": {
+            "tokenCount": 6213
+          }
+        }
+      },
+      "modelDisplayName": "Claude Sonnet 5.5"
+    }
+  ],
+  "currentModel": "claude-opus-5.5",
+  "lastCallInputTokens": 112033,
+  "lastCallOutputTokens": 577
+}

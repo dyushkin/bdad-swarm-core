@@ -1,0 +1,181 @@
+{
+  "totalPremiumRequestCost": 15,
+  "totalUserRequests": 1,
+  "totalNanoAiu": 162549640000,
+  "aiCreditsStatus": "complete",
+  "tokenDetails": {
+    "input": {
+      "tokenCount": 66
+    },
+    "cache_read": {
+      "tokenCount": 1574587
+    },
+    "cache_write": {
+      "tokenCount": 125791
+    },
+    "output": {
+      "tokenCount": 34068
+    }
+  },
+  "totalApiDurationMs": 290519,
+  "sessionStartTime": "2026-11-20T03:07:06.411Z",
+  "codeChanges": {
+    "linesAdded": 366,
+    "linesRemoved": 4,
+    "filesModifiedCount": 5,
+    "filesModified": [
+      "/Users/dyushkin/Projects/Adobe/Magento-1/magento2ee/app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php",
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s3/1-patch-generator.md",
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s3/green-verification.md",
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s3/stop3.md",
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s3/execution-log.md"
+    ]
+  },
+  "modelMetrics": {
+    "claude-opus-5.5": {
+      "requests": {
+        "count": 31,
+        "cost": 15
+      },
+      "usage": {
+        "inputTokens": 1700444,
+        "outputTokens": 34068,
+        "cacheReadTokens": 1574587,
+        "cacheWriteTokens": 125791,
+        "reasoningTokens": 4799
+      },
+      "cacheExpiresAt": "2026-11-20T03:18:05.348Z",
+      "totalNanoAiu": 162549640000,
+      "aiCreditsStatus": "complete",
+      "tokenDetails": {
+        "input": {
+          "tokenCount": 66
+        },
+        "cache_read": {
+          "tokenCount": 1574587
+        },
+        "cache_write": {
+          "tokenCount": 125791
+        },
+        "output": {
+          "tokenCount": 34068
+        }
+      }
+    }
+  },
+  "agentMetrics": {
+    "main": {
+      "totalApiDurationMs": 229751,
+      "totalNanoAiu": 130818440000,
+      "modelMetrics": {
+        "claude-opus-5.5": {
+          "requests": {
+            "count": 22,
+            "cost": 15
+          },
+          "usage": {
+            "inputTokens": 1474684,
+            "outputTokens": 27395,
+            "cacheReadTokens": 1377727,
+            "cacheWriteTokens": 96911,
+            "reasoningTokens": 3022
+          },
+          "totalNanoAiu": 130818440000,
+          "tokenDetails": {
+            "input": {
+              "tokenCount": 46
+            },
+            "cache_read": {
+              "tokenCount": 1377727
+            },
+            "cache_write": {
+              "tokenCount": 96911
+            },
+            "output": {
+              "tokenCount": 27395
+            }
+          }
+        }
+      }
+    },
+    "2b38638f-dc59-4e22-8158-3f7feb058ffd": {
+      "agentName": "patch-generator",
+      "agentDisplayName": "patch-generator",
+      "totalApiDurationMs": 60768,
+      "totalNanoAiu": 31731200000,
+      "modelMetrics": {
+        "claude-opus-5.5": {
+          "requests": {
+            "count": 9,
+            "cost": 0
+          },
+          "usage": {
+            "inputTokens": 225760,
+            "outputTokens": 6673,
+            "cacheReadTokens": 196860,
+            "cacheWriteTokens": 28880,
+            "reasoningTokens": 1777
+          },
+          "totalNanoAiu": 31731200000,
+          "tokenDetails": {
+            "input": {
+              "tokenCount": 20
+            },
+            "cache_read": {
+              "tokenCount": 196860
+            },
+            "cache_write": {
+              "tokenCount": 28880
+            },
+            "output": {
+              "tokenCount": 6673
+            }
+          }
+        }
+      }
+    }
+  },
+  "providerModelMetrics": [
+    {
+      "provider": {
+        "id": "copilot",
+        "label": "GitHub Copilot",
+        "kind": "copilot"
+      },
+      "modelId": "claude-opus-5.5",
+      "metrics": {
+        "requests": {
+          "count": 31,
+          "cost": 15
+        },
+        "usage": {
+          "inputTokens": 1700444,
+          "outputTokens": 34068,
+          "cacheReadTokens": 1574587,
+          "cacheWriteTokens": 125791,
+          "reasoningTokens": 4799
+        },
+        "totalNanoAiu": 162549640000,
+        "aiCreditsStatus": "complete",
+        "tokenDetails": {
+          "input": {
+            "tokenCount": 66
+          },
+          "cache_read": {
+            "tokenCount": 1574587
+          },
+          "cache_write": {
+            "tokenCount": 125791
+          },
+          "output": {
+            "tokenCount": 34068
+          }
+        }
+      },
+      "modelDisplayName": "Claude Opus 5.5"
+    }
+  ],
+  "currentModel": "claude-opus-5.5",
+  "lastCallInputTokens": 96913,
+  "lastCallOutputTokens": 753
+}

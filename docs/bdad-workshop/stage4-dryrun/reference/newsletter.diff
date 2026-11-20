@@ -1,0 +1,25 @@
+diff --git a/app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php b/app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php
+index 52ac72a9e9..fc1960e05e 100644
+--- a/app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php
++++ b/app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php
+@@ -185,6 +185,8 @@ class Newsletter extends AbstractCondition
+     }
+ 
+     /**
++     * Check whether the customer satisfies the newsletter subscription condition for the website.
++     *
+      * @param int $customer
+      * @param int $websiteId
+      * @param array $params
+@@ -198,9 +200,10 @@ class Newsletter extends AbstractCondition
+         $customerSelect = $this->getResource()->createSelect();
+         $table = $this->getResource()->getTable('customer_entity');
+         $customerSelect->from(['root' => $table], ['entity_id']);
++        $customerSelect->where($this->_createCustomerFilter($customer, 'root.entity_id'));
+         $select = $this->getConditionsSql($customer, $websiteId);
+         $customerSelect->where($select);
+-        $matchedParams = $this->matchParameters($select, $params);
++        $matchedParams = $this->matchParameters($customerSelect, $params);
+         $result = $this->getResource()->getConnection()->fetchOne($customerSelect, $matchedParams);
+         return $result > 0;
+     }

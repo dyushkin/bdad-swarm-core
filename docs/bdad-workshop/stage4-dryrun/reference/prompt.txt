@@ -1,0 +1,59 @@
+Ticket ACP2E-5597. STOP 3 has been passed. The human decisions and the approved 5-scenario behavior contract are in
+/Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/stop3-decisions.md. Stage 3 artifacts are in /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage3-dryrun/reference (stop3.md, 1-patch-generator.md, green-verification.md,
+newsletter.diff); Stage 2 artifacts are in /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage2-dryrun/reference (1-dependency-tracer.md, 2-test-author.md, red-verification.md).
+Run the BDAD Swarm Stage 4 only: the STOP 3 loop-back (Test Author, then Red/Green re-confirmation), STEP 5 (Consensus
+Gateway) and STEP 6 (Scribe egress). End at STOP 4. This is a DRY RUN of Stage 4 on the real working tree.
+
+Dry-run constraints:
+- Allowed repository writes, and only by the named owner:
+  - Test Author: magento2ee/dev/tests/integration/testsuite/Magento/CustomerSegment/Model/Segment/Condition/Customer/NewsletterTest.php
+  - Patch Generator: magento2ee/app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php
+  Both are also reachable through the CE symlinks. Do not commit or stage. No other repository writes.
+- Allowed php commands: `php -l <file>`, `vendor/bin/phpcs --standard=Magento2 <file>`,
+  `vendor/bin/phpunit -c dev/tests/integration/phpunit.xml "$PWD/<test>" [--filter <method>]`,
+  `vendor/bin/phpunit -c dev/tests/static/phpunit.php.xml`, and
+  `php dev/tools/impact-graph/bin/impact-graph analyze ...`. No other php, bin/magento, mysql, docker or rm.
+- The static-suite config dev/tests/static/phpunit.php.xml (Allure stripped) and the changed-file list
+  dev/tests/static/testsuite/Magento/Test/_files/changed_files_local.txt were prepared by the harness. Do not edit them.
+- The change is uncommitted, so use `HEAD` as the MIG diff ref (not '2.4-develop...HEAD').
+- Do not update Jira or create Glean comments. Do not write docs/retrospectives/.
+- Write artifacts only under /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549, with the file-creation tool (shell redirection writes are denied).
+- For the current branch use `git rev-parse --abbrev-ref HEAD`; `git branch` is denied in this harness.
+
+Flow:
+1. Record your Execution Model preflight. Load stop3-decisions.md and the Stage 2/3 artifacts. Run scout-ensure_fresh.
+2. Dispatch test-author (sync) with: the approved 5-scenario contract verbatim, STOP 3 decisions 2, 3 and 6 verbatim,
+   the Stage 3 whole-class evidence (cart invariant fails at line 203 only when the whole class runs), the test path and
+   the exact test commands. Test Author makes NewsletterTest order-independent and adds one test method for Scenario 5.
+   It must not change production code or the other four scenarios' meaning. With the fix in place it runs the whole
+   class once and returns: the test diff, the cause of the order dependence and how it was removed, the new method
+   name, and the PHPUnit result.
+3. Dispatch patch-generator (sync) for Red/Green re-confirmation (STOP 3 decision 6) on the changed test: undo the fix
+   in Newsletter.php with your edit tool (restore the HEAD content of the two changed lines; see /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage3-dryrun/reference/newsletter.diff),
+   run the whole class (expect only the Defect method to fail), restore the fix exactly, run the whole class (expect
+   all 5 to pass). Return the commands and the per-method results for both runs, and confirm the restored file matches
+   /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage3-dryrun/reference/newsletter.diff.
+4. Verify yourself: `git -C magento2ee diff` on Newsletter.php equals /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage3-dryrun/reference/newsletter.diff, and one whole-class run
+   passes.
+5. Dispatch consensus-gateway (sync). Give it: both changed files, the Phase 0 report from /Users/dyushkin/Projects/Adobe/Magento-1/docs/bdad-workshop/stage2-dryrun/reference/1-dependency-tracer.md,
+   the MIG commands with ref HEAD, the bulk-path tests from STOP 3 decision 4, and the Gateway scope decisions from
+   stop3-decisions.md. It runs its Completion Gate (§A on both files, §B static suite, MIG --diff/--mock-impact, the
+   bulk-path tests; §C recorded as not applicable) and returns a green / not-green verdict with the failing output.
+6. If the verdict is not-green, this is a blocking loop-back, not a stop point: send the failing output verbatim to the
+   owner (Patch Generator for Newsletter.php, Test Author for NewsletterTest.php), then re-verify the class and
+   re-dispatch consensus-gateway. At most 2 loop-backs; if still not-green, go to STOP 4 with the not-green verdict.
+7. On green, dispatch scribe (sync) for STEP 6 egress, written only under /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/egress/: dev-summary.md,
+   release-notes.md (include the behavior change for unknown customer ids from Stage 3), and retrospective.md
+   (Manual Steps to Reproduce, plus a Usage section marked "pending session end" that names /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/usage.json).
+8. Present STOP 4 and halt.
+
+Observability requirements:
+1. Save each specialist's returned output verbatim as soon as it returns, numbered in dispatch order:
+   /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/<n>-<agent>.md (for example 1-test-author.md, 2-patch-generator.md, 3-consensus-gateway.md). Do not paraphrase.
+2. Save your own verification (commands, relevant PHPUnit output, the diff) to /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/verification.md.
+3. Save your STOP 4 presentation verbatim to /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/stop4.md. Include: the Gateway verdict with every check and its
+   result, every loop-back (why, owner, outcome), Red/Green per method for the final test, the files changed in the
+   repository, what was not run, and the decisions requested at STOP 4.
+4. Write /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/execution-log.md: an ordered log of every MCP call and shell command (tool and purpose), each dispatch
+   (agent, sync/background, requested model, runtime-reported model or "unknown", usage or "unknown"), and the order
+   in which outputs were received and by whom. Do not estimate unknown values.

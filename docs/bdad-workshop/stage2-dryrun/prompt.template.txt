@@ -1,0 +1,38 @@
+Ticket {{TICKET}}. STOP 1 has been passed. The human decisions and the approved behavior contract are in
+{{A}}/stop1-decisions.md. Stage 1 artifacts are in {{S1}} (stop1.md, 01-scribe.md, 02-dependency-tracer.md).
+Run the BDAD Swarm Stage 2 only: STEP 2 (Dependency Tracer, formal MIG Phase 0) and STEP 3 (Test Author, Red).
+End at STOP 2. This is a DRY RUN of Stage 2 with a real Red test.
+
+Dry-run constraints:
+- Allowed repository writes: new or changed test files under
+  magento2ee/dev/tests/integration/testsuite/Magento/CustomerSegment/ only (it is symlinked as
+  dev/tests/integration/testsuite/Magento/CustomerSegment/). No production code changes. Do not commit or stage.
+- Allowed php commands: `php dev/tools/impact-graph/bin/impact-graph analyze ...` (MIG; writes only the git-ignored
+  var/ cache) and `vendor/bin/phpunit -c dev/tests/integration/phpunit.xml "$PWD/<test>" --filter <method>`.
+  No other php, bin/magento, mysql, docker or rm.
+- Do not update Jira or create Glean comments.
+- Write artifacts only under {{A}}, with the file-creation tool (shell redirection writes are denied).
+- For the current branch use `git rev-parse --abbrev-ref HEAD`; `git branch` is denied in this harness.
+
+Flow:
+1. Record your Execution Model preflight. Load stop1-decisions.md and the Stage 1 artifacts.
+2. Dispatch dependency-tracer (sync) for the formal Phase 0 Blast-Radius Report on the symbols the fix will touch
+   (Newsletter::isSatisfiedBy and its class). Run the MIG impact-graph commands from the runbook STEP 2, name the
+   dependent domains from .github/agents/reference/domains.md, and confirm callers with Scout. Budget: 30 tool calls,
+   150 output lines.
+3. After the Tracer returns, dispatch test-author (sync) with the approved contract verbatim, the Phase 0 report
+   and the Stage 1 notes. The Test Author maps each scenario to a test method, writes the tests, runs each new method
+   with --filter, and returns: file path(s), method-to-scenario map, exact commands, and the PHPUnit result per
+   method (the Defect test must FAIL for the right reason; the Invariant tests must PASS).
+4. Verify Red yourself: re-run the Defect test method once with --filter and confirm the failure reason.
+5. Present STOP 2 and halt.
+
+Observability requirements:
+1. Save each specialist's returned output verbatim as soon as it returns: Tracer to {{A}}/1-dependency-tracer.md,
+   Test Author to {{A}}/2-test-author.md. Do not paraphrase.
+2. Save your Red verification (command and the relevant PHPUnit output) to {{A}}/red-verification.md.
+3. Save your STOP 2 presentation verbatim to {{A}}/stop2.md. Include the approved contract, the method-to-scenario
+   map, Red/Pass per method, the files changed in the repository, and the decisions requested at STOP 2.
+4. Write {{A}}/execution-log.md: an ordered log of every MCP call and shell command (tool and purpose), each dispatch
+   (agent, sync/background, requested model, runtime-reported model or "unknown", usage or "unknown"), and the order
+   in which outputs were received and by whom. Do not estimate unknown values.

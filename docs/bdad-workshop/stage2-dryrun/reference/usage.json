@@ -1,0 +1,285 @@
+{
+  "totalPremiumRequestCost": 15,
+  "totalUserRequests": 1,
+  "totalNanoAiu": 294894590000,
+  "aiCreditsStatus": "complete",
+  "tokenDetails": {
+    "input": {
+      "tokenCount": 115249
+    },
+    "cache_read": {
+      "tokenCount": 2508062
+    },
+    "cache_write": {
+      "tokenCount": 245696
+    },
+    "output": {
+      "tokenCount": 64688
+    }
+  },
+  "totalApiDurationMs": 591077,
+  "sessionStartTime": "2026-11-20T02:10:52.056Z",
+  "codeChanges": {
+    "linesAdded": 725,
+    "linesRemoved": 1,
+    "filesModifiedCount": 6,
+    "filesModified": [
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s2/1-dependency-tracer.md",
+      "/Users/dyushkin/Projects/Adobe/Magento-1/magento2ee/dev/tests/integration/testsuite/Magento/CustomerSegment/Model/Segment/Condition/Customer/NewsletterTest.php",
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s2/2-test-author.md",
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s2/red-verification.md",
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s2/stop2.md",
+      "/Users/dyushkin/.copilot/session-state/fa9073d0-fb95-4155-bd68-721012bec7a0/files/dryrun-s2/execution-log.md"
+    ]
+  },
+  "modelMetrics": {
+    "claude-opus-5.5": {
+      "requests": {
+        "count": 47,
+        "cost": 15
+      },
+      "usage": {
+        "inputTokens": 2656576,
+        "outputTokens": 58068,
+        "cacheReadTokens": 2410782,
+        "cacheWriteTokens": 245696,
+        "reasoningTokens": 13129
+      },
+      "cacheExpiresAt": "2026-11-20T02:27:11.570Z",
+      "totalNanoAiu": 287238840000,
+      "aiCreditsStatus": "complete",
+      "tokenDetails": {
+        "input": {
+          "tokenCount": 98
+        },
+        "cache_read": {
+          "tokenCount": 2410782
+        },
+        "cache_write": {
+          "tokenCount": 245696
+        },
+        "output": {
+          "tokenCount": 58068
+        }
+      }
+    },
+    "mai-code-2": {
+      "requests": {
+        "count": 6,
+        "cost": 0
+      },
+      "usage": {
+        "inputTokens": 212431,
+        "outputTokens": 6620,
+        "cacheReadTokens": 97280,
+        "cacheWriteTokens": 0,
+        "reasoningTokens": 1425
+      },
+      "totalNanoAiu": 7655750000,
+      "aiCreditsStatus": "complete",
+      "tokenDetails": {
+        "input": {
+          "tokenCount": 115151
+        },
+        "cache_read": {
+          "tokenCount": 97280
+        },
+        "cache_write": {
+          "tokenCount": 0
+        },
+        "output": {
+          "tokenCount": 6620
+        }
+      }
+    }
+  },
+  "agentMetrics": {
+    "main": {
+      "totalApiDurationMs": 236063,
+      "totalNanoAiu": 168423520000,
+      "modelMetrics": {
+        "claude-opus-5.5": {
+          "requests": {
+            "count": 19,
+            "cost": 15
+          },
+          "usage": {
+            "inputTokens": 1303448,
+            "outputTokens": 29414,
+            "cacheReadTokens": 1129426,
+            "cacheWriteTokens": 173982,
+            "reasoningTokens": 2874
+          },
+          "totalNanoAiu": 168423520000,
+          "tokenDetails": {
+            "input": {
+              "tokenCount": 40
+            },
+            "cache_read": {
+              "tokenCount": 1129426
+            },
+            "cache_write": {
+              "tokenCount": 173982
+            },
+            "output": {
+              "tokenCount": 29414
+            }
+          }
+        }
+      }
+    },
+    "3ab9a1bd-0ed5-44ce-8913-d4ae7d2c7722": {
+      "agentName": "dependency-tracer",
+      "agentDisplayName": "dependency-tracer",
+      "totalApiDurationMs": 101578,
+      "totalNanoAiu": 7655750000,
+      "modelMetrics": {
+        "mai-code-2": {
+          "requests": {
+            "count": 6,
+            "cost": 0
+          },
+          "usage": {
+            "inputTokens": 212431,
+            "outputTokens": 6620,
+            "cacheReadTokens": 97280,
+            "cacheWriteTokens": 0,
+            "reasoningTokens": 1425
+          },
+          "totalNanoAiu": 7655750000,
+          "tokenDetails": {
+            "input": {
+              "tokenCount": 115151
+            },
+            "cache_read": {
+              "tokenCount": 97280
+            },
+            "cache_write": {
+              "tokenCount": 0
+            },
+            "output": {
+              "tokenCount": 6620
+            }
+          }
+        }
+      }
+    },
+    "f84bede9-2908-4a14-a584-b8bc9c3d023f": {
+      "agentName": "test-author",
+      "agentDisplayName": "test-author",
+      "totalApiDurationMs": 253436,
+      "totalNanoAiu": 118815320000,
+      "modelMetrics": {
+        "claude-opus-5.5": {
+          "requests": {
+            "count": 28,
+            "cost": 0
+          },
+          "usage": {
+            "inputTokens": 1353128,
+            "outputTokens": 28654,
+            "cacheReadTokens": 1281356,
+            "cacheWriteTokens": 71714,
+            "reasoningTokens": 10255
+          },
+          "totalNanoAiu": 118815320000,
+          "tokenDetails": {
+            "input": {
+              "tokenCount": 58
+            },
+            "cache_read": {
+              "tokenCount": 1281356
+            },
+            "cache_write": {
+              "tokenCount": 71714
+            },
+            "output": {
+              "tokenCount": 28654
+            }
+          }
+        }
+      }
+    }
+  },
+  "providerModelMetrics": [
+    {
+      "provider": {
+        "id": "copilot",
+        "label": "GitHub Copilot",
+        "kind": "copilot"
+      },
+      "modelId": "claude-opus-5.5",
+      "metrics": {
+        "requests": {
+          "count": 47,
+          "cost": 15
+        },
+        "usage": {
+          "inputTokens": 2656576,
+          "outputTokens": 58068,
+          "cacheReadTokens": 2410782,
+          "cacheWriteTokens": 245696,
+          "reasoningTokens": 13129
+        },
+        "totalNanoAiu": 287238840000,
+        "aiCreditsStatus": "complete",
+        "tokenDetails": {
+          "input": {
+            "tokenCount": 98
+          },
+          "cache_read": {
+            "tokenCount": 2410782
+          },
+          "cache_write": {
+            "tokenCount": 245696
+          },
+          "output": {
+            "tokenCount": 58068
+          }
+        }
+      },
+      "modelDisplayName": "Claude Opus 5.5"
+    },
+    {
+      "provider": {
+        "id": "copilot",
+        "label": "GitHub Copilot",
+        "kind": "copilot"
+      },
+      "modelId": "mai-code-2",
+      "metrics": {
+        "requests": {
+          "count": 6,
+          "cost": 0
+        },
+        "usage": {
+          "inputTokens": 212431,
+          "outputTokens": 6620,
+          "cacheReadTokens": 97280,
+          "cacheWriteTokens": 0,
+          "reasoningTokens": 1425
+        },
+        "totalNanoAiu": 7655750000,
+        "aiCreditsStatus": "complete",
+        "tokenDetails": {
+          "input": {
+            "tokenCount": 115151
+          },
+          "cache_read": {
+            "tokenCount": 97280
+          },
+          "cache_write": {
+            "tokenCount": 0
+          },
+          "output": {
+            "tokenCount": 6620
+          }
+        }
+      },
+      "modelDisplayName": "MAI Code 2"
+    }
+  ],
+  "currentModel": "claude-opus-5.5",
+  "lastCallInputTokens": 100175,
+  "lastCallOutputTokens": 672
+}

@@ -1,0 +1,38 @@
+Ticket {{TICKET}}. STOP 2 has been passed. The human decisions are in {{A}}/stop2-decisions.md. Stage 2 artifacts
+are in {{S2}} (stop2.md, 1-dependency-tracer.md, 2-test-author.md, red-verification.md); the approved behavior
+contract is in {{S2}}/stop1-decisions.md.
+Run the BDAD Swarm Stage 3 only: STEP 4 (Patch Generator, Green). End at STOP 3. This is a DRY RUN of Stage 3 with
+a real fix in the working tree.
+
+Dry-run constraints:
+- Allowed repository writes: magento2ee/app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php
+  only (also reachable as app/code/Magento/CustomerSegment/... through the symlink). The test file NewsletterTest.php
+  must not be changed. Do not commit or stage.
+- Allowed php commands: `php -l <file>` and
+  `vendor/bin/phpunit -c dev/tests/integration/phpunit.xml "$PWD/<test>" [--filter <method>]`.
+  No other php, bin/magento, mysql, docker or rm.
+- Do not update Jira or create Glean comments.
+- Write artifacts only under {{A}}, with the file-creation tool (shell redirection writes are denied).
+- For the current branch use `git rev-parse --abbrev-ref HEAD`; `git branch` is denied in this harness.
+
+Flow:
+1. Record your Execution Model preflight. Load stop2-decisions.md and the Stage 2 artifacts. Run scout-ensure_fresh.
+2. Dispatch patch-generator (sync) with: the approved contract verbatim, the STOP 2 decisions verbatim, the Phase 0
+   report, the test file path and method map, and the exact test commands. Patch Generator implements the fix in
+   Newsletter.php, runs php -l and each of the four test methods with --filter, and returns: the diff, the reason for
+   the chosen approach (including how the bulk path getConditionsSql()/getSatisfiedIds() stays unchanged), the exact
+   commands, and the PHPUnit result per method.
+3. Verify Green yourself: run php -l on Newsletter.php, run the whole NewsletterTest class once (no --filter), and
+   review `git -C magento2ee diff`. Confirm that only Newsletter.php changed in production code and the test file is
+   unchanged. Check the Stage 2 false-positive note (only the fixed condition query touches customer_entity).
+4. Present STOP 3 and halt.
+
+Observability requirements:
+1. Save the specialist's returned output verbatim as soon as it returns: {{A}}/1-patch-generator.md. Do not paraphrase.
+2. Save your Green verification (commands, relevant PHPUnit output and the diff) to {{A}}/green-verification.md.
+3. Save your STOP 3 presentation verbatim to {{A}}/stop3.md. Include the diff, the approach and its justification,
+   Green/Pass per method (before vs after), the files changed in the repository, what was not run (Stage 4 items),
+   and the decisions requested at STOP 3.
+4. Write {{A}}/execution-log.md: an ordered log of every MCP call and shell command (tool and purpose), each dispatch
+   (agent, sync/background, requested model, runtime-reported model or "unknown", usage or "unknown"), and the order
+   in which outputs were received and by whom. Do not estimate unknown values.

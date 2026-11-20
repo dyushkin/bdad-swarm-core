@@ -1,0 +1,44 @@
+--- /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/NewsletterTest-before.php.txt	2026-11-19 21:35:50
++++ /Users/dyushkin/bdad-dryrun/ACP2E-5597-stage4-20261119-213549/NewsletterTest-after.php.txt	2026-11-19 22:12:10
+@@ -64,6 +64,9 @@
+     {
+         $this->objectManager = Bootstrap::getObjectManager();
+         $this->fixtures = DataFixtureStorageManager::getStorage();
++        // The shared segment model memoizes the active-segment collection per event/website, which would
++        // otherwise carry segments of previously run tests into this one (DbIsolation is disabled).
++        $this->objectManager->get(SegmentCustomer::class)->_resetState();
+     }
+ 
+     /**
+@@ -211,6 +214,31 @@
+             'subtotal + discount + shipping + tax must equal grand total'
+         );
+         $this->assertEqualsWithDelta((float)$address->getGrandTotal(), (float)$quote->getGrandTotal(), 0.0001);
++    }
++
++    /**
++     * Scenario: A customer who is not subscribed to the newsletter is checked against a "not subscribed" segment
++     * Expected: The condition is satisfied
++     */
++    #[
++        DataFixture(CustomerFixture::class, as: 'customer'),
++        DataFixture(
++            SegmentFixture::class,
++            [
++                'conditions' => [
++                    '1' => ['type' => Root::class, 'aggregator' => 'all', 'value' => '1', 'new_child' => ''],
++                    '1--1' => ['type' => Newsletter::class, 'value' => '0', 'new_child' => ''],
++                ],
++            ],
++            'segment'
++        ),
++    ]
++    public function testValidateUnsubscribedCustomerSatisfiesNotSubscribedCondition(): void
++    {
++        $customer = $this->fixtures->get('customer');
++        $segment = $this->loadSegment((int)$this->fixtures->get('segment')->getId());
++
++        $this->assertTrue($segment->validateCustomer((int)$customer->getId(), (int)$customer->getWebsiteId()));
+     }
+ 
+     /**

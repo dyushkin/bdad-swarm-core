@@ -1,0 +1,2 @@
+app/code/Magento/CustomerSegment/Model/Segment/Condition/Customer/Newsletter.php
+dev/tests/integration/testsuite/Magento/CustomerSegment/Model/Segment/Condition/Customer/NewsletterTest.php

@@ -1,0 +1,284 @@
+<?php
+/**
+ * Copyright 2026 Adobe
+ * All Rights Reserved.
+ */
+declare(strict_types=1);
+
+namespace Magento\CustomerSegment\Model\Segment\Condition\Customer;
+
+use Magento\Catalog\Test\Fixture\Product as ProductFixture;
+use Magento\Customer\Test\Fixture\Customer as CustomerFixture;
+use Magento\CustomerSegment\Model\Customer as SegmentCustomer;
+use Magento\CustomerSegment\Model\ResourceModel\Segment as SegmentResource;
+use Magento\CustomerSegment\Model\Segment;
+use Magento\CustomerSegment\Model\Segment\Condition\Combine\Root;
+use Magento\CustomerSegment\Model\Segment\Condition\Segment as SegmentCondition;
+use Magento\CustomerSegment\Model\SegmentFactory;
+use Magento\CustomerSegment\Test\Fixture\SegmentWithComplexConditions as SegmentFixture;
+use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\DB\Adapter\AdapterInterface;
+use Magento\Framework\ObjectManagerInterface;
+use Magento\Quote\Api\CartRepositoryInterface;
+use Magento\Quote\Test\Fixture\AddProductToCart as AddProductToCartFixture;
+use Magento\Quote\Test\Fixture\CustomerCart as CustomerCartFixture;
+use Magento\SalesRule\Model\Rule as SalesRule;
+use Magento\SalesRule\Test\Fixture\Rule as RuleFixture;
+use Magento\Store\Test\Fixture\Group as StoreGroupFixture;
+use Magento\Store\Test\Fixture\Store as StoreFixture;
+use Magento\Store\Test\Fixture\Website as WebsiteFixture;
+use Magento\TestFramework\Fixture\DataFixture;
+use Magento\TestFramework\Fixture\DataFixtureStorage;
+use Magento\TestFramework\Fixture\DataFixtureStorageManager;
+use Magento\TestFramework\Fixture\DbIsolation;
+use Magento\TestFramework\Helper\Bootstrap;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Integration coverage for the newsletter subscription customer segment condition flow.
+ *
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ */
+#[DbIsolation(false)]
+class NewsletterTest extends TestCase
+{
+    private const SUBSCRIBED_CONDITIONS = [
+        '1' => ['type' => Root::class, 'aggregator' => 'all', 'value' => '1', 'new_child' => ''],
+        '1--1' => ['type' => Newsletter::class, 'value' => '1', 'new_child' => ''],
+    ];
+
+    /**
+     * @var ObjectManagerInterface
+     */
+    private ObjectManagerInterface $objectManager;
+
+    /**
+     * @var DataFixtureStorage
+     */
+    private DataFixtureStorage $fixtures;
+
+    /**
+     * @inheritdoc
+     */
+    protected function setUp(): void
+    {
+        $this->objectManager = Bootstrap::getObjectManager();
+        $this->fixtures = DataFixtureStorageManager::getStorage();
+        // The shared segment model memoizes the active-segment collection per event/website, which would
+        // otherwise carry segments of previously run tests into this one (DbIsolation is disabled).
+        $this->objectManager->get(SegmentCustomer::class)->_resetState();
+    }
+
+    /**
+     * Scenario: Many customers exist and a subscribed customer is checked against a "subscribed" segment
+     * Expected: The condition is satisfied and only that customer's customer_entity record is examined
+     */
+    #[
+        DataFixture(CustomerFixture::class, as: 'other', count: 5),
+        DataFixture(CustomerFixture::class, ['extension_attributes' => ['is_subscribed' => true]], 'customer'),
+        DataFixture(SegmentFixture::class, ['conditions' => self::SUBSCRIBED_CONDITIONS], 'segment'),
+    ]
+    public function testValidateSubscribedCustomerExaminesOnlyThatCustomerRecord(): void
+    {
+        $customerId = (int)$this->fixtures->get('customer')->getId();
+        $websiteId = (int)$this->fixtures->get('customer')->getWebsiteId();
+        $segment = $this->loadSegment((int)$this->fixtures->get('segment')->getId());
+        $connection = $this->objectManager->get(ResourceConnection::class)->getConnection();
+        $customerTable = $connection->getTableName('customer_entity');
+
+        $isSatisfied = null;
+        $queries = $this->captureQueries(
+            $connection,
+            function () use ($segment, $customerId, $websiteId, &$isSatisfied) {
+                $isSatisfied = $segment->validateCustomer($customerId, $websiteId);
+            }
+        );
+
+        $this->assertTrue($isSatisfied, 'Subscribed customer must satisfy the newsletter condition.');
+        $this->assertNotEmpty($queries, 'The condition evaluation queries must be captured.');
+        $totalCustomers = (int)$connection->fetchOne(
+            $connection->select()->from($customerTable, 'COUNT(*)')
+        );
+        $this->assertGreaterThan(5, $totalCustomers);
+        foreach ($queries as [$sql, $bind]) {
+            if (strpos($sql, $customerTable) === false) {
+                continue;
+            }
+            $rows = $connection->fetchCol($sql, $bind);
+            $foreignIds = array_values(array_diff(array_map('intval', $rows), [$customerId]));
+            $this->assertTrue(
+                count($rows) <= 1 && $foreignIds === [],
+                sprintf(
+                    "Expected only customer %d's record to be examined, got %d rows (of %d customers): [%s]\n"
+                    . 'SQL: %s',
+                    $customerId,
+                    count($rows),
+                    $totalCustomers,
+                    implode(', ', array_slice($rows, 0, 20)) . (count($rows) > 20 ? ', ...' : ''),
+                    $sql
+                )
+            );
+        }
+    }
+
+    /**
+     * Scenario: A customer who is not subscribed to the newsletter is checked against a "subscribed" segment
+     * Expected: The condition is not satisfied
+     */
+    #[
+        DataFixture(CustomerFixture::class, as: 'customer'),
+        DataFixture(SegmentFixture::class, ['conditions' => self::SUBSCRIBED_CONDITIONS], 'segment'),
+    ]
+    public function testValidateUnsubscribedCustomerIsNotSatisfied(): void
+    {
+        $customer = $this->fixtures->get('customer');
+        $segment = $this->loadSegment((int)$this->fixtures->get('segment')->getId());
+
+        $this->assertFalse($segment->validateCustomer((int)$customer->getId(), (int)$customer->getWebsiteId()));
+    }
+
+    /**
+     * Scenario: A customer subscribed only in a store of another website is checked for the segment's website
+     * Expected: The condition is not satisfied
+     */
+    #[
+        DataFixture(WebsiteFixture::class, as: 'website2'),
+        DataFixture(StoreGroupFixture::class, ['website_id' => '$website2.id$'], 'group2'),
+        DataFixture(
+            StoreFixture::class,
+            ['store_group_id' => '$group2.id$', 'website_id' => '$website2.id$'],
+            'store2'
+        ),
+        DataFixture(CustomerFixture::class, ['extension_attributes' => ['is_subscribed' => true]], 'customer'),
+        DataFixture(
+            SegmentFixture::class,
+            ['website_ids' => ['$website2.id$'], 'conditions' => self::SUBSCRIBED_CONDITIONS],
+            'segment'
+        ),
+    ]
+    public function testValidateCustomerSubscribedInOtherWebsiteIsNotSatisfied(): void
+    {
+        $customerId = (int)$this->fixtures->get('customer')->getId();
+        $segmentWebsiteId = (int)$this->fixtures->get('website2')->getId();
+        $segment = $this->loadSegment((int)$this->fixtures->get('segment')->getId());
+
+        $this->assertNotEquals((int)$this->fixtures->get('customer')->getWebsiteId(), $segmentWebsiteId);
+        $this->assertFalse($segment->validateCustomer($customerId, $segmentWebsiteId));
+    }
+
+    /**
+     * Scenario: A subscribed customer's cart is totaled with a couponless rule on a "subscribed" segment
+     * Expected: The 20% discount is applied and totals stay consistent
+     */
+    #[
+        DataFixture(SegmentFixture::class, ['conditions' => self::SUBSCRIBED_CONDITIONS], 'segment'),
+        DataFixture(
+            RuleFixture::class,
+            [
+                'simple_action' => SalesRule::BY_PERCENT_ACTION,
+                'discount_amount' => 20,
+                'conditions' => [
+                    ['type' => SegmentCondition::class, 'operator' => '==', 'value' => '$segment.id$'],
+                ],
+            ],
+            'rule'
+        ),
+        DataFixture(CustomerFixture::class, ['extension_attributes' => ['is_subscribed' => true]], 'customer'),
+        DataFixture(ProductFixture::class, ['price' => 100], 'product'),
+        DataFixture(CustomerCartFixture::class, ['customer_id' => '$customer.id$'], 'cart'),
+        DataFixture(AddProductToCartFixture::class, ['cart_id' => '$cart.id$', 'product_id' => '$product.id$']),
+    ]
+    public function testCollectTotalsForSubscribedCustomerAppliesSegmentCartRuleDiscount(): void
+    {
+        $customer = $this->fixtures->get('customer');
+        $this->objectManager->get(SegmentCustomer::class)->processEvent(
+            'customer_save_commit_after',
+            (int)$customer->getId(),
+            (int)$customer->getWebsiteId()
+        );
+
+        $quote = $this->objectManager->get(CartRepositoryInterface::class)
+            ->get((int)$this->fixtures->get('cart')->getId());
+        $quote->setTotalsCollectedFlag(false)->collectTotals();
+        $address = $quote->isVirtual() ? $quote->getBillingAddress() : $quote->getShippingAddress();
+        $appliedRuleIds = explode(',', (string)$quote->getAppliedRuleIds());
+
+        $this->assertContains((string)$this->fixtures->get('rule')->getId(), $appliedRuleIds);
+        $this->assertEqualsWithDelta(100.0, (float)$address->getSubtotal(), 0.0001);
+        $this->assertEqualsWithDelta(-20.0, (float)$address->getDiscountAmount(), 0.0001);
+        $this->assertEqualsWithDelta(
+            (float)$address->getSubtotal() + (float)$address->getDiscountAmount()
+            + (float)$address->getShippingAmount() + (float)$address->getTaxAmount(),
+            (float)$address->getGrandTotal(),
+            0.0001,
+            'subtotal + discount + shipping + tax must equal grand total'
+        );
+        $this->assertEqualsWithDelta((float)$address->getGrandTotal(), (float)$quote->getGrandTotal(), 0.0001);
+    }
+
+    /**
+     * Scenario: A customer who is not subscribed to the newsletter is checked against a "not subscribed" segment
+     * Expected: The condition is satisfied
+     */
+    #[
+        DataFixture(CustomerFixture::class, as: 'customer'),
+        DataFixture(
+            SegmentFixture::class,
+            [
+                'conditions' => [
+                    '1' => ['type' => Root::class, 'aggregator' => 'all', 'value' => '1', 'new_child' => ''],
+                    '1--1' => ['type' => Newsletter::class, 'value' => '0', 'new_child' => ''],
+                ],
+            ],
+            'segment'
+        ),
+    ]
+    public function testValidateUnsubscribedCustomerSatisfiesNotSubscribedCondition(): void
+    {
+        $customer = $this->fixtures->get('customer');
+        $segment = $this->loadSegment((int)$this->fixtures->get('segment')->getId());
+
+        $this->assertTrue($segment->validateCustomer((int)$customer->getId(), (int)$customer->getWebsiteId()));
+    }
+
+    /**
+     * Load a segment by id so its prepared condition SQL is available.
+     *
+     * @param int $segmentId
+     * @return Segment
+     */
+    private function loadSegment(int $segmentId): Segment
+    {
+        $segment = $this->objectManager->get(SegmentFactory::class)->create();
+        $this->objectManager->get(SegmentResource::class)->load($segment, $segmentId);
+
+        return $segment;
+    }
+
+    /**
+     * Run a callback with the DB profiler enabled and return the executed queries with their bindings.
+     *
+     * @param AdapterInterface $connection
+     * @param callable $callback
+     * @return array<int, array{0: string, 1: array}>
+     */
+    private function captureQueries(AdapterInterface $connection, callable $callback): array
+    {
+        $profiler = $connection->getProfiler();
+        $wasEnabled = $profiler->getEnabled();
+        $profiler->clear();
+        $profiler->setEnabled(true);
+        try {
+            $callback();
+            $queries = [];
+            foreach ($profiler->getQueryProfiles(null, true) ?: [] as $profile) {
+                $queries[] = [$profile->getQuery(), $profile->getQueryParams()];
+            }
+        } finally {
+            $profiler->setEnabled($wasEnabled);
+            $profiler->clear();
+        }
+
+        return $queries;
+    }
+}
